@@ -211,9 +211,14 @@ pub fn vertical_slider(
                 let pos_in_travel = (mouse_pos.y - (rect.top() + knob_radius)).clamp(0.0, travel);
                 let new_normalized = 1.0 - (pos_in_travel / travel).clamp(0.0, 1.0);
 
-                *value = min + new_normalized * (max - min);
-                changed = true;
-                response.mark_changed();
+                let new_value = min + new_normalized * (max - min);
+                // Only report a change when the value actually moved; a finger held
+                // still would otherwise trigger a full re-sort every frame
+                if new_value != *value {
+                    *value = new_value;
+                    changed = true;
+                    response.mark_changed();
+                }
             }
         }
 
