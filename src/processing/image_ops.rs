@@ -1,5 +1,6 @@
 use crate::PixelSorterApp;
 use eframe::egui;
+use rayon::prelude::*;
 use std::sync::Arc;
 
 impl PixelSorterApp {
@@ -31,52 +32,15 @@ impl PixelSorterApp {
     }
 
     fn apply_tint_to_image(&self, image: &mut image::RgbImage, tint_hue: f32) {
-        let (width, height) = image.dimensions();
         let tint_color = crate::processing::pixel_sorter::hue_to_rgb_pixel(tint_hue);
         let strength = 0.2; // Strength for tinting
-        
-        for y in 0..height {
-            for x in 0..width {
-                let pixel = image.get_pixel(x, y);
-                let tinted = self.blend_tint_preserve_luminance(pixel, &tint_color, strength);
-                image.put_pixel(x, y, tinted);
-            }
-        }
-    }
 
-    fn blend_tint_preserve_luminance(&self, original: &image::Rgb<u8>, tint: &image::Rgb<u8>, strength: f32) -> image::Rgb<u8> {
-        let strength = strength.clamp(0.0, 1.0);
-        
-        let orig_r = original[0] as f32 / 255.0;
-        let orig_g = original[1] as f32 / 255.0;
-        let orig_b = original[2] as f32 / 255.0;
-        
-        // Calculate luminance to preserve brightness
-        let luminance = 0.299 * orig_r + 0.587 * orig_g + 0.114 * orig_b;
-        
-        // For very dark or very bright pixels, reduce tint strength
-        let adjusted_strength = if !(0.1..=0.9).contains(&luminance) {
-            strength * 0.3  // Preserve blacks and whites more
-        } else {
-            strength
-        };
-        
-        let tint_r = tint[0] as f32 / 255.0;
-        let tint_g = tint[1] as f32 / 255.0;
-        let tint_b = tint[2] as f32 / 255.0;
-        
-        // Blend with original
-        let final_r = (orig_r * (1.0 - adjusted_strength) + orig_r * tint_r * adjusted_strength).clamp(0.0, 1.0);
-        let final_g = (orig_g * (1.0 - adjusted_strength) + orig_g * tint_g * adjusted_strength).clamp(0.0, 1.0);
-        let final_b = (orig_b * (1.0 - adjusted_strength) + orig_b * tint_b * adjusted_strength).clamp(0.0, 1.0);
-        
-        image::Rgb([
-            (final_r * 255.0).round() as u8,
-            (final_g * 255.0).round() as u8,
-            (final_b * 255.0).round() as u8,
-        ])
+        let pixels: &mut [u8] = image;
+        pixels.par_chunks_exact_mut(3).for_each(|px| {
+            let tinted = blend_tint_preserve_luminance(&image::Rgb([px[0], px[1], px[2]]), &tint_color, strength);
+            px.copy_from_slice(&tinted.0);
+        });
     }
-
 
     pub fn load_image(&mut self, ctx: &egui::Context) {
         if let Some(path) = rfd::FileDialog::new()
@@ -98,6 +62,37 @@ impl PixelSorterApp {
             }
         }
     }
+}
 
-        // Removed unused method save_image
+fn blend_tint_preserve_luminance(original: &image::Rgb<u8>, tint: &image::Rgb<u8>, strength: f32) -> image::Rgb<u8> {
+    let strength = strength.clamp(0.0, 1.0);
+    
+    let orig_r = original[0] as f32 / 255.0;
+    let orig_g = original[1] as f32 / 255.0;
+    let orig_b = original[2] as f32 / 255.0;
+    
+    // Calculate luminance to preserve brightness
+    let luminance = 0.299 * orig_r + 0.587 * orig_g + 0.114 * orig_b;
+    
+    // For very dark or very bright pixels, reduce tint strength
+    let adjusted_strength = if !(0.1..=0.9).contains(&luminance) {
+        strength * 0.3  // Preserve blacks and whites more
+    } else {
+        strength
+    };
+    
+    let tint_r = tint[0] as f32 / 255.0;
+    let tint_g = tint[1] as f32 / 255.0;
+    let tint_b = tint[2] as f32 / 255.0;
+    
+    // Blend with original
+    let final_r = (orig_r * (1.0 - adjusted_strength) + orig_r * tint_r * adjusted_strength).clamp(0.0, 1.0);
+    let final_g = (orig_g * (1.0 - adjusted_strength) + orig_g * tint_g * adjusted_strength).clamp(0.0, 1.0);
+    let final_b = (orig_b * (1.0 - adjusted_strength) + orig_b * tint_b * adjusted_strength).clamp(0.0, 1.0);
+    
+    image::Rgb([
+        (final_r * 255.0).round() as u8,
+        (final_g * 255.0).round() as u8,
+        (final_b * 255.0).round() as u8,
+    ])
 }

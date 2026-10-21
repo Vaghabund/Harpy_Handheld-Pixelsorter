@@ -2276,6 +2276,7 @@ dependencies = [
  "i2cdev",
  "image",
  "log",
+ "rayon",
  "rfd",
 ]
 
