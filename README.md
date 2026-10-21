@@ -26,12 +26,13 @@ Harpy makes this process immediate and physical: capture, sort, iterate, export.
 
 ## How It Works
 
-1. **Capture** — tap to take a photo from the live camera feed, or upload an image
+1. **Capture** — tap to take a photo from the live camera feed, or pick an image from a USB drive
 2. **Sort** — choose horizontal, vertical, or diagonal sorting
 3. **Tune** — drag the threshold slider to control where segments break; optionally tint with the hue slider
 4. **Crop** — drag handles to frame the result
 5. **Iterate** — Save & Iterate writes the sorted image and loads it as the new source; keep going as deep as you want
-6. **Export** — plug in a USB drive; Harpy auto-detects it and copies your session
+6. **Export** — plug in a USB drive; Harpy auto-detects it and copies the sessions you select
+7. **Gallery** — browse saved sessions, view, re-edit or delete images
 
 ---
 
@@ -42,10 +43,12 @@ Harpy makes this process immediate and physical: capture, sort, iterate, export.
 | Threshold slider | Controls sensitivity of pixel segment breaks — low = long streaks, high = short bursts |
 | Hue slider | Adds a color tint to the display (non-destructive until saved) |
 | Algorithm button | Cycles: Horizontal → Vertical → Diagonal |
-| Sort Mode button | Changes sort direction within the algorithm |
+| Sort Mode button | Brightness / Black: dark → light, White: light → dark |
 | Save & Iterate | Saves current result and loads it as next input |
-| New Image | Start over with a fresh capture or upload |
-| Export to USB | Copies the full session to any mounted USB drive |
+| New Image | Start over with a fresh capture (asks to save unsaved edits first) |
+| USB (camera screen) | Browse a USB drive and pick an image to sort |
+| Gallery (camera screen) | Saved sessions: view full screen, re-edit, delete |
+| Export to USB | Copies the selected sessions to any mounted USB drive |
 
 ---
 
@@ -69,8 +72,8 @@ Harpy makes this process immediate and physical: capture, sort, iterate, export.
 sudo apt update && sudo apt upgrade -y
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-sudo apt install -y rpicam-apps libgtk-3-dev libglib2.0-dev \
-    libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libatk1.0-dev
+sudo apt install -y rpicam-apps libxkbcommon-dev libxcb-render0-dev \
+    libxcb-shape0-dev libxcb-xfixes0-dev
 ```
 
 **Clone, build, and set up auto-start:**
@@ -101,6 +104,8 @@ Harpy runs on Windows, macOS, and Linux for development. The camera is replaced 
 ```bash
 cargo run
 ```
+
+Set `HARPY_USB_DIR=/some/folder` to treat a folder as the USB drive (for the USB browser and export) on machines without a mounted stick.
 
 Saved images (`sorted_images/`) and `ups_config.toml` live in the project checkout, which the app finds from its executable path (`<checkout>/target/<profile>/pixelsort-pi`), so it works from any working directory. Set `HARPY_APP_DIR` to use a different folder.
 

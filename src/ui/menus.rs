@@ -294,34 +294,64 @@ impl PixelSorterApp {
                 ui.vertical_centered(|ui| {
                     ui.add_space(style.spacing * 0.67);
                     
-                    ui.label(button_text("📁 Copy all sorted images to USB?", style.heading_size));
-                    
-                    ui.add_space(style.spacing);
-                    
-                    // Checkbox for delete after copy
-                    ui.horizontal(|ui| {
-                        ui.add_space((style.width - 320.0) / 2.0); // Center the checkbox
-                        ui.checkbox(&mut self.usb_export_delete_after, 
-                            button_text("Delete images after copying", style.label_size * 0.9));
-                    });
-                    
-                    ui.add_space(style.spacing * 1.33);
-                    
-                    // Copy button
-                    if ui.add_sized(
-                        [style.button_width, style.button_height], 
-                        egui::Button::new(button_text("✔ Copy to USB", style.label_size))
-                            .fill(egui::Color32::from_rgb(40, 120, 40)))
-                        .clicked() 
-                    {
-                        self.start_usb_export(ctx, self.usb_export_delete_after);
-                        
-                        self.show_usb_export_dialog = false;
-                        self.usb_export_delete_after = false; // Reset for next time
+                    if self.usb_export_choices.is_empty() {
+                        ui.label(button_text("No saved images to export yet", style.heading_size));
+                        ui.add_space(style.spacing);
+                    } else {
+                        ui.label(button_text("📁 Copy sorted images to USB", style.heading_size));
+                        ui.add_space(style.spacing);
+
+                        // Finger-sized checkboxes and rows
+                        ui.spacing_mut().icon_width = 32.0;
+                        ui.spacing_mut().icon_width_inner = 20.0;
+                        ui.spacing_mut().icon_spacing = 12.0;
+                        ui.spacing_mut().item_spacing.y = 12.0;
+
+                        // Select all / none
+                        let all_selected = self.usb_export_choices.iter().all(|(_, selected)| *selected);
+                        let mut select_all = all_selected;
+                        ui.checkbox(&mut select_all, button_text("All sessions", style.label_size));
+                        if select_all != all_selected {
+                            for (_, selected) in &mut self.usb_export_choices {
+                                *selected = select_all;
+                            }
+                        }
+                        ui.separator();
+
+                        // One checkbox per session, newest first
+                        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                            for (session, selected) in &mut self.usb_export_choices {
+                                let label = format!("{}  ({} images)", session.name, session.images.len());
+                                ui.checkbox(selected, button_text(&label, style.label_size * 0.9));
+                            }
+                        });
+                        ui.separator();
+                        ui.add_space(style.spacing * 0.5);
+
+                        ui.checkbox(&mut self.usb_export_delete_after,
+                            button_text("Delete selected after copying", style.label_size * 0.9));
+
+                        ui.add_space(style.spacing * 1.33);
+
+                        let selected_count: usize = self.usb_export_choices.iter()
+                            .filter(|(_, selected)| *selected)
+                            .map(|(session, _)| session.images.len())
+                            .sum();
+                        let copy_label = format!("✔ Copy {} images to USB", selected_count);
+                        let copy_clicked = ui.add_enabled(
+                            selected_count > 0,
+                            egui::Button::new(button_text(&copy_label, style.label_size))
+                                .fill(egui::Color32::from_rgb(40, 120, 40))
+                                .min_size(egui::vec2(style.button_width, style.button_height)),
+                        ).clicked();
+                        if copy_clicked {
+                            self.start_usb_export(ctx);
+                            self.show_usb_export_dialog = false;
+                        }
+
+                        ui.add_space(style.spacing * 0.67);
                     }
-                    
-                    ui.add_space(style.spacing * 0.67);
-                    
+
                     // Cancel button
                     if menu_button(ui, [style.button_width, style.cancel_button_height], "Cancel", style.label_size) {
                         self.show_usb_export_dialog = false;

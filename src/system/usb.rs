@@ -3,10 +3,22 @@ use std::path::PathBuf;
 /// Filesystem types used by USB sticks we can export to
 const USB_FS_TYPES: [&str; 3] = ["vfat", "exfat", "ntfs"];
 
+/// Environment variable naming a folder to treat as a USB drive (desktop development)
+const USB_DIR_ENV: &str = "HARPY_USB_DIR";
+
+/// All USB drives mounted under /media/ (for browsing; may be read-only)
+pub fn find_usb_mounts() -> Vec<PathBuf> {
+    if let Some(dir) = std::env::var_os(USB_DIR_ENV) {
+        return vec![PathBuf::from(dir)];
+    }
+    std::fs::read_to_string("/proc/mounts")
+        .map(|mounts| usb_mount_points(&mounts))
+        .unwrap_or_default()
+}
+
 /// Find the first writable USB drive mounted under /media/
 pub fn find_writable_usb_mount() -> Option<PathBuf> {
-    let mounts = std::fs::read_to_string("/proc/mounts").ok()?;
-    usb_mount_points(&mounts).into_iter().find(|mount_point| {
+    find_usb_mounts().into_iter().find(|mount_point| {
         // Test if we can write to it
         let test_file = mount_point.join(".pixelsort_usb_check");
         if std::fs::write(&test_file, "test").is_ok() {

@@ -47,6 +47,8 @@ impl PixelSorterApp {
             Phase::Input => self.render_input_layout(ctx, screen_rect),
             Phase::Edit => self.render_edit_layout(ctx, screen_rect),
             Phase::Crop => self.render_crop_layout(ctx, screen_rect),
+            // File screens draw their own buttons
+            Phase::Gallery | Phase::Browse => {}
         }
     }
 
@@ -82,8 +84,22 @@ impl PixelSorterApp {
             .fixed_pos(small_center - egui::vec2(sizes.small_radius, sizes.small_radius))
             .order(egui::Order::Background)
             .show(ctx, |ui| {
-                if circular_button_default(ui, sizes.small_radius, "Upload") {
-                    self.load_image(ctx);
+                if circular_button_default(ui, sizes.small_radius, "USB") {
+                    self.open_usb_browser();
+                }
+            });
+
+        // Gallery button (small, left of the Take Picture button)
+        let gallery_center = egui::pos2(
+            large_center.x - sizes.large_radius - sizes.spacing - sizes.small_radius,
+            screen_rect.max.y - sizes.small_radius - sizes.spacing,
+        );
+        egui::Area::new("gallery_btn")
+            .fixed_pos(gallery_center - egui::vec2(sizes.small_radius, sizes.small_radius))
+            .order(egui::Order::Background)
+            .show(ctx, |ui| {
+                if circular_button_default(ui, sizes.small_radius, "Gallery") {
+                    self.open_gallery();
                 }
             });
     }
@@ -179,7 +195,7 @@ impl PixelSorterApp {
                 .order(egui::Order::Background)
                 .show(ctx, |ui| {
                     if circular_button(ui, btn_sizes.normal_radius * USB_BUTTON_SCALE, "USB", button_green()) {
-                        self.show_usb_export_dialog = true;
+                        self.open_usb_export_dialog();
                     }
                 });
         }

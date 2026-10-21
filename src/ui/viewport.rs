@@ -11,6 +11,7 @@ impl PixelSorterApp {
             Phase::Input => self.render_input_viewport(ui, rect),
             Phase::Edit => self.render_edit_viewport(ui, rect),
             Phase::Crop => self.render_crop_viewport(ui, rect, ctx),
+            Phase::Gallery | Phase::Browse => self.render_file_screen(ui, rect, ctx),
         }
     }
 
