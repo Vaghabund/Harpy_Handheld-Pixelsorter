@@ -3,6 +3,10 @@ pub enum Phase {
     Input,
     Edit,
     Crop,
+    /// Saved sessions, full-screen viewer
+    Gallery,
+    /// USB drive image browser
+    Browse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

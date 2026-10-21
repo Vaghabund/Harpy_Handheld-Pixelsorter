@@ -26,6 +26,7 @@ impl PixelSorterApp {
         match take_finished(&mut self.capture_task) {
             Some(Some(Ok(frame))) => {
                 self.cancel_sort();
+                self.has_unsaved_changes = true;
                 self.original_image = Some(frame.clone());
                 self.processed_image = Some(frame.clone());
                 self.create_processed_texture(ctx, frame);
@@ -34,7 +35,7 @@ impl PixelSorterApp {
             Some(Some(Err(e))) => {
                 // Preview stream restarts automatically on the next frame
                 log::error!("Capture failed: {}", e);
-                self.show_message(format!("✗ Capture failed: {}", e));
+                self.show_message(format!("❌ Capture failed: {}", e));
             }
             Some(None) => log::error!("Capture thread ended without a result"),
             None => {}
