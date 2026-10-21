@@ -150,47 +150,27 @@ impl PixelSorterApp {
         }
     }
 
-    pub fn load_last_iteration_as_source(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(ref session_folder) = self.current_session_folder {
-            if self.iteration_counter > 0 {
-                // Load the last saved iteration as the new source
-                let session_dir = crate::system::paths::sorted_images_dir().join(session_folder);
-                
-                // Find the last saved file
-                let iteration_prefix = format!("edit_{:03}_", self.iteration_counter);
-                for entry in std::fs::read_dir(&session_dir)? {
-                    let entry = entry?;
-                    let filename = entry.file_name().to_string_lossy().to_string();
-                    if filename.starts_with(&iteration_prefix) {
-                        // Load this image as the new original
-                        let image_path = entry.path();
-                        {
-                            let img = image::open(&image_path)?;
-                            let rgb_image = img.to_rgb8();
-                            self.original_image = Some(rgb_image);
-                            return Ok(());
-                        }
-                    }
-                }
-            }
-        }
-        Err("No previous iteration found to load".into())
-    }
-
+    /// Save the current result and use it as the source for the next round of sorting
     pub fn save_and_continue_iteration(&mut self, ctx: &egui::Context) {
-        if let Some(ref processed) = self.processed_image.clone() {
-            // Extract algorithm to avoid borrow conflict
-            let algorithm = self.current_algorithm;
-            // Save the current iteration using the existing auto-save system
-            if let Ok(_saved_path) = self.auto_save_image(processed, &algorithm) {
-                // Load the saved image as the new source for next iteration
-                if let Ok(()) = self.load_last_iteration_as_source() {
-                    // Process the loaded image immediately for preview; a sort of the
-                    // previous source still in flight is obsolete
-                    self.cancel_sort();
-                    self.apply_pixel_sort(ctx);
-                }
-            }
+        let Some(processed) = self.processed_image.clone() else {
+            return;
+        };
+        let algorithm = self.current_algorithm;
+        if let Err(e) = self.auto_save_image(&processed, &algorithm) {
+            log::error!("Failed to save iteration: {}", e);
+            self.show_message(format!("✗ Save failed: {}", e));
+            return;
         }
+
+        // The saved image (with its tint baked in) becomes the new source. Reset
+        // the tint so it isn't applied again on top on the next pass.
+        self.original_image = Some(processed);
+        self.sorting_params.color_tint = 0.0;
+        self.tint_enabled = false;
+
+        // Re-sort the new source for preview; a sort of the previous source
+        // still in flight is obsolete
+        self.cancel_sort();
+        self.apply_pixel_sort(ctx);
     }
 }
