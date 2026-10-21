@@ -177,7 +177,8 @@ fn check_battery_voltage(config: &UpsConfig) -> Result<(f32, bool), String> {
         if let Ok(mut file) = File::open(path) {
             let mut contents = String::new();
             if file.read_to_string(&mut contents).is_ok() {
-                is_charging = contents.trim().to_lowercase().contains("charging");
+                // Exact match: "Discharging" contains "charging" as a substring
+                is_charging = contents.trim().eq_ignore_ascii_case("charging");
                 break;
             }
         }
