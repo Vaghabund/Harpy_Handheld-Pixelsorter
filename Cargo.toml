@@ -8,16 +8,11 @@ license = "MIT"
 [dependencies]
 # Image processing
 image = "0.24"
+rayon = "1.10"  # Parallel pixel sorting
 
 # GUI framework - egui for immediate mode GUI
 eframe = "0.24"
 egui = "0.24"
-
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
-
-# File dialogs and system integration
-rfd = "0.11"
 
 # Error handling
 anyhow = "1.0"
@@ -25,20 +20,12 @@ anyhow = "1.0"
 # Date and time for timestamped filenames
 chrono = "0.4"
 
-# Lazy static for global state
-lazy_static = "1.4"
-
 # I2C communication for UPS battery monitoring (Linux only)
 i2cdev = "0.6"
 
 # Logging
 log = "0.4"
 env_logger = "0.10"
-
-[target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "windef", "winnt", "winbase"] }
 
 [profile.release]
 opt-level = 3

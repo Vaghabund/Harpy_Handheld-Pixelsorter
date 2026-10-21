@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use anyhow::{anyhow, Result};
 use image::{RgbImage, ImageBuffer};
 use std::path::Path;
@@ -22,7 +21,6 @@ pub struct CameraController {
     preview_height: u32,
     /// Temporary file paths
     temp_capture_path: String,
-    temp_preview_path: String,
     /// Whether rpicam commands are available
     is_available: bool,
     /// Streaming camera process for live preview
@@ -49,7 +47,6 @@ impl CameraController {
             preview_width: 1024,
             preview_height: 600,
             temp_capture_path: "/tmp/pixelsort_capture.jpg".to_string(),
-            temp_preview_path: "/tmp/pixelsort_preview.jpg".to_string(),
             is_available: false,
             stream_process: None,
             frame_receiver: None,
@@ -87,25 +84,6 @@ impl CameraController {
                 }
             }
         }
-    }
-
-    /// Set camera resolution
-    pub fn set_resolution(&mut self, width: u32, height: u32) -> Result<()> {
-        self.capture_width = width;
-        self.capture_height = height;
-        
-        // Reinitialize camera with new settings
-        self.initialize()
-    }
-
-    /// Set JPEG quality (0-100)
-    pub fn set_quality(&mut self, quality: u8) {
-        self.quality = quality.min(100);
-    }
-
-    /// Check if camera is available and working
-    pub fn is_available(&self) -> bool {
-        self.is_available
     }
 
     /// Start continuous camera streaming for live preview
@@ -235,11 +213,6 @@ impl CameraController {
         Ok(latest_frame)
     }
 
-    /// Get the latest preview image (now uses streaming)
-    pub fn get_preview_image(&mut self) -> Result<Option<RgbImage>> {
-        self.get_fast_preview_image()
-    }
-
     /// Get animated test pattern when camera not available
     fn get_test_pattern(&self) -> Result<RgbImage> {
         let time = std::time::SystemTime::now()
@@ -252,44 +225,6 @@ impl CameraController {
             let g = ((y as f32 / self.preview_height as f32 * 255.0) + (time * 30.0).cos() * 50.0) as u8;
             let b = (((x + y) as f32 / (self.preview_width + self.preview_height) as f32 * 255.0) + (time * 70.0).sin() * 50.0) as u8;
             image::Rgb([r.saturating_add(100), g.saturating_add(100), b.saturating_add(100)])
-        });
-        Ok(img)
-    }
-
-    /// Check if image is likely corrupted (solid color, etc.)
-    fn is_likely_corrupted(&self, img: &RgbImage) -> bool {
-        if img.width() < 10 || img.height() < 10 {
-            return true; // Too small
-        }
-        
-        // Sample a few pixels to check for solid color (common corruption)
-        let sample_pixels = [
-            img.get_pixel(img.width() / 4, img.height() / 4),
-            img.get_pixel(img.width() / 2, img.height() / 2),
-            img.get_pixel(3 * img.width() / 4, 3 * img.height() / 4),
-            img.get_pixel(10, 10),
-            img.get_pixel(img.width() - 10, img.height() - 10),
-        ];
-        
-        // If all sampled pixels are identical, likely corrupted
-        let first_pixel = sample_pixels[0];
-        sample_pixels.iter().all(|&pixel| pixel == first_pixel)
-    }
-
-    /// Load existing preview file or return placeholder
-    fn load_existing_preview_or_placeholder(&self) -> Result<RgbImage> {
-        // Try to load existing preview file
-        if let Ok(img) = image::open(&self.temp_preview_path) {
-            return Ok(img.to_rgb8());
-        }
-
-        // Return placeholder pattern
-        let img = ImageBuffer::from_fn(self.preview_width, self.preview_height, |x, y| {
-            if (x + y) % 40 < 20 {
-                image::Rgb([60, 60, 60])
-            } else {
-                image::Rgb([80, 80, 80])
-            }
         });
         Ok(img)
     }
@@ -343,10 +278,6 @@ impl CameraController {
         }
     }
 
-    /// Get current camera settings
-    pub fn get_settings(&self) -> (u32, u32, u8) {
-        (self.capture_width, self.capture_height, self.quality)
-    }
 }
 
 impl Drop for CameraController {
@@ -357,9 +288,6 @@ impl Drop for CameraController {
         // Clean up any remaining temp files
         if Path::new(&self.temp_capture_path).exists() {
             let _ = std::fs::remove_file(&self.temp_capture_path);
-        }
-        if Path::new(&self.temp_preview_path).exists() {
-            let _ = std::fs::remove_file(&self.temp_preview_path);
         }
     }
 }

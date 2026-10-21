@@ -2,7 +2,7 @@ use anyhow::Result;
 use eframe::egui;
 use log::info;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::Mutex;
 
 // Domain modules
 mod hardware;
@@ -15,9 +15,7 @@ use crate::processing::PixelSorter;
 use crate::ui::PixelSorterApp;
 use crate::hardware::{CameraController, UpsConfig};
 
-#[tokio::main]
-#[allow(clippy::arc_with_non_send_sync)]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Set up logging (Info level for production)
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
@@ -29,7 +27,7 @@ async fn main() -> Result<()> {
     let ups_config = load_ups_config();
     
     // Start UPS monitoring (runs in background)
-    let _shutdown_flag = hardware::start_monitoring(ups_config);
+    hardware::start_monitoring(ups_config);
     
     // Initialize components
     let pixel_sorter = Arc::new(PixelSorter::new());
@@ -37,7 +35,7 @@ async fn main() -> Result<()> {
     // Initialize Camera controller  
     let camera_controller = match CameraController::new() {
         Ok(controller) => {
-            Some(Arc::new(RwLock::new(controller)))
+            Some(Arc::new(Mutex::new(controller)))
         }
         Err(e) => {
             log::error!("Camera initialization failed: {}. Camera features disabled.", e);
@@ -85,6 +83,7 @@ async fn main() -> Result<()> {
 fn setup_touch_style(ctx: &egui::Context) {
     // Force 1.0 zoom to use full resolution (disable DPI scaling)
     ctx.set_zoom_factor(1.0);
+    crate::ui::theme::install_fonts(ctx);
     
     let mut style = (*ctx.style()).clone();
     
@@ -117,11 +116,8 @@ fn setup_touch_style(ctx: &egui::Context) {
 
 fn load_icon() -> egui::IconData {
     // Try to load icon from file, fallback to embedded default
-    let icon_path = "assets/Harpy_ICON.png";
-    
-    match image::open(icon_path) {
-        Ok(img) => {
-            let rgba = img.to_rgba8();
+    match crate::ui::helpers::load_logo_image() {
+        Some(rgba) => {
             let (width, height) = rgba.dimensions();
             egui::IconData {
                 rgba: rgba.into_raw(),
@@ -129,9 +125,8 @@ fn load_icon() -> egui::IconData {
                 height,
             }
         }
-        Err(_) => {
+        None => {
             // Fallback: Create a simple colored square as default icon
-            log::warn!("Could not load icon from {}, using default", icon_path);
             let width = 64;
             let height = 64;
             let mut rgba = vec![0u8; (width * height * 4) as usize];
@@ -159,10 +154,10 @@ fn load_icon() -> egui::IconData {
 fn load_ups_config() -> UpsConfig {
     use std::fs;
     
-    let config_path = "ups_config.toml";
+    let config_path = crate::system::paths::ups_config_path();
     
     // Try to load from file
-    if let Ok(contents) = fs::read_to_string(config_path) {
+    if let Ok(contents) = fs::read_to_string(&config_path) {
         // Simple TOML parsing for our needs
         let mut config = UpsConfig::default();
         
@@ -194,10 +189,10 @@ fn load_ups_config() -> UpsConfig {
             }
         }
         
-        info!("UPS configuration loaded from {}", config_path);
+        info!("UPS configuration loaded from {}", config_path.display());
         config
     } else {
-        info!("No UPS config found at {}, using defaults (disabled)", config_path);
+        info!("No UPS config found at {}, using defaults (disabled)", config_path.display());
         UpsConfig::default()
     }
 }

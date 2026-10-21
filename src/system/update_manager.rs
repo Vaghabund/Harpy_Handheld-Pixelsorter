@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 /// Manages application updates via git
-#[allow(dead_code)]
 pub struct UpdateManager {
     /// Whether an update is available
     pub update_available: bool,
@@ -17,21 +16,25 @@ impl UpdateManager {
         }
     }
     
-    /// Check if updates are available by comparing local and remote git commits
-    pub fn check_for_updates(&mut self) -> Result<bool> {
+    pub fn project_path(&self) -> &str {
+        &self.project_path
+    }
+
+    /// Check if updates are available by comparing local and remote git commits.
+    /// Runs `git fetch` (network), so call it off the UI thread.
+    pub fn check_for_updates(project_path: &str) -> Result<bool> {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
             
-            log::info!("Checking for updates in: {}", self.project_path);
+            log::info!("Checking for updates in: {}", project_path);
             
-            let cmd = format!(
-                "cd {} && git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main",
-                self.project_path
-            );
-            
+            // timeout: don't hang forever on a dead network
+            let cmd = "timeout 60 git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main";
+
             let output = Command::new("sh")
-                .args(&["-c", &cmd])
+                .args(["-c", cmd])
+                .current_dir(project_path)
                 .output()?;
             
             if !output.status.success() {
@@ -53,21 +56,20 @@ impl UpdateManager {
                 
                 if local != remote {
                     log::info!("Update available: {} -> {}", &local[..7.min(local.len())], &remote[..7.min(remote.len())]);
-                    self.update_available = true;
-                    return Ok(true);
+                    Ok(true)
                 } else {
                     log::info!("App is up to date: {}", &local[..7.min(local.len())]);
-                    self.update_available = false;
-                    return Ok(false);
+                    Ok(false)
                 }
             } else {
                 log::error!("Unexpected git output format. Got {} lines", lines.len());
-                return Err(anyhow::anyhow!("Unexpected git output format"));
+                Err(anyhow::anyhow!("Unexpected git output format"))
             }
         }
         
         #[cfg(not(target_os = "linux"))]
         {
+            let _ = project_path;
             log::warn!("Update checking only available on Linux");
             Ok(false)
         }
@@ -91,8 +93,8 @@ impl UpdateManager {
                 // Fallback: inline update commands (for first-time update when script doesn't exist yet)
                 log::warn!("Update script not found, using fallback inline method");
                 let fallback_cmd = format!(
-                    "sleep 3 && cd {} && git pull origin main && cargo build --release && sudo systemctl restart {}",
-                    self.project_path, service_name
+                    "sleep 3 && git pull origin main && cargo build --release && sudo systemctl restart {}",
+                    service_name
                 );
                 vec!["/bin/sh".into(), "-c".into(), fallback_cmd]
             };

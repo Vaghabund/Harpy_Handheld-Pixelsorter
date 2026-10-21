@@ -20,18 +20,17 @@ cd "$PROJECT_PATH" || {
 }
 
 echo "Pulling latest code..."
-git pull origin main
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Git pull failed - restarting service with existing binary"
+# The device never carries intentional local edits, so force the checkout to
+# match origin/main (a plain pull fails on any stray local change).
+# Untracked/ignored files such as sorted_images/ and ups_config.toml are kept.
+if ! { git fetch origin main && git reset --hard origin/main; }; then
+    echo "ERROR: Git update failed - restarting service with existing binary"
     sudo systemctl restart "$SERVICE_NAME"
     exit 1
 fi
 
 echo "Rebuilding application (this may take 5-10 minutes)..."
-cargo build --release
-
-if [ $? -ne 0 ]; then
+if ! cargo build --release; then
     echo "ERROR: Build failed - restarting service with existing binary"
     sudo systemctl restart "$SERVICE_NAME"
     exit 1

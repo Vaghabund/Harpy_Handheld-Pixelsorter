@@ -1,23 +1,32 @@
 [Unit]
-Description=Harpy Pixel Sorter (Auto-updating Kiosk Mode)
-After=graphical.target network.target
+Description=Harpy Pixel Sorter (cage Wayland kiosk)
+# Take over tty1 instead of the login prompt
+After=systemd-user-sessions.service plymouth-quit-wait.service network.target
 Wants=network.target
+Conflicts=getty@tty1.service
+After=getty@tty1.service
 
 [Service]
 Type=simple
 User=pixelsort
 WorkingDirectory=/home/pixelsort/Pixelsort
-# Unified launcher: waits for X11, then starts app
-ExecStartPre=/bin/chmod +x /home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
-ExecStart=/home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
-Restart=on-failure
-RestartSec=10
+# A logind session on tty1 gives cage access to the display, input and
+# XDG_RUNTIME_DIR without a desktop or display manager
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
-
-# Environment variables for X11 display
-Environment="DISPLAY=:0"
-Environment="XAUTHORITY=/home/pixelsort/.Xauthority"
+UtmpIdentifier=tty1
+UtmpMode=user
+# cage shows exactly one fullscreen app; -s allows switching to another
+# VT (Ctrl+Alt+F2) for a console login while debugging
+ExecStart=/usr/bin/cage -s -- /bin/bash /home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
+Restart=on-failure
+RestartSec=10
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

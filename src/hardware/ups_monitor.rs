@@ -2,17 +2,20 @@
 // Monitors I2C-based UPS HAT for low battery warnings
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
-use tokio::time::sleep;
+use std::thread::sleep;
 
 // Shared flag to signal shutdown request
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 // Shared battery status
-lazy_static::lazy_static! {
-    static ref BATTERY_STATUS: Arc<Mutex<BatteryStatus>> = Arc::new(Mutex::new(BatteryStatus::default()));
-}
+static BATTERY_STATUS: Mutex<BatteryStatus> = Mutex::new(BatteryStatus {
+    voltage: 0.0,
+    percentage: 0.0,
+    is_charging: false,
+    is_available: false,
+});
 
 /// Battery status information
 #[derive(Clone, Debug)]
@@ -67,16 +70,13 @@ impl Default for UpsConfig {
 }
 
 /// Start UPS monitoring in background
-pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
-    let shutdown_flag = Arc::new(AtomicBool::new(false));
-    let flag_clone = shutdown_flag.clone();
-
+pub fn start_monitoring(config: UpsConfig) {
     if !config.enabled {
         log::info!("UPS monitoring is disabled");
-        return shutdown_flag;
+        return;
     }
 
-    tokio::spawn(async move {
+    std::thread::spawn(move || {
         log::info!("UPS monitoring started (I2C bus {}, address 0x{:02X})", 
                    config.i2c_bus, config.i2c_address);
         
@@ -95,7 +95,7 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
         }
         
         loop {
-            sleep(Duration::from_secs(config.check_interval_secs)).await;
+            sleep(Duration::from_secs(config.check_interval_secs));
             
             // Check battery status
             match check_battery_voltage(&config) {
@@ -124,7 +124,7 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
                         let mut cancelled = false;
                         for i in (1..=6).rev() {
                             log::warn!("Shutting down in {} seconds...", i * 5);
-                            sleep(Duration::from_secs(5)).await;
+                            sleep(Duration::from_secs(5));
                             if let Ok((voltage, is_charging)) = check_battery_voltage(&config) {
                                 if is_charging || voltage >= config.voltage_threshold {
                                     cancelled = true;
@@ -139,7 +139,6 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
 
                         log::error!("Battery critical! Initiating safe shutdown...");
                         SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
-                        flag_clone.store(true, Ordering::Relaxed);
                         
                         // Trigger system shutdown
                         if let Err(e) = initiate_system_shutdown() {
@@ -158,7 +157,6 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
         }
     });
 
-    shutdown_flag
 }
 
 /// Convert voltage to percentage (rough estimation)
@@ -260,7 +258,7 @@ fn initiate_system_shutdown() -> Result<(), String> {
     log::info!("Executing system shutdown command...");
     
     Command::new("sudo")
-        .args(&["shutdown", "-h", "now"])
+        .args(["shutdown", "-h", "now"])
         .spawn()
         .map_err(|e| format!("Failed to execute shutdown: {}", e))?;
     
@@ -273,31 +271,3 @@ fn initiate_system_shutdown() -> Result<(), String> {
     Ok(())
 }
 
-/// Check if running on battery power (vs AC)
-#[cfg(target_os = "linux")]
-#[allow(dead_code)]
-pub fn is_on_battery() -> bool {
-    use std::fs;
-    
-    // Check common power supply status files
-    let status_paths = [
-        "/sys/class/power_supply/AC/online",
-        "/sys/class/power_supply/ADP0/online",
-    ];
-    
-    for path in &status_paths {
-        if let Ok(contents) = fs::read_to_string(path) {
-            if let Ok(online) = contents.trim().parse::<u8>() {
-                return online == 0; // 0 = on battery, 1 = AC connected
-            }
-        }
-    }
-    
-    false // Assume on AC if unknown
-}
-
-#[cfg(not(target_os = "linux"))]
-#[allow(dead_code)]
-pub fn is_on_battery() -> bool {
-    false // Development machine
-}

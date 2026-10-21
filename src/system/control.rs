@@ -13,7 +13,7 @@ impl SystemControl {
             log::info!("Initiating system shutdown...");
             
             Command::new("sudo")
-                .args(&["shutdown", "-h", "now"])
+                .args(["shutdown", "-h", "now"])
                 .spawn()
                 .map_err(|e| anyhow::anyhow!("Failed to shutdown: {}", e))?;
             
@@ -36,7 +36,7 @@ impl SystemControl {
             log::info!("Initiating system reboot...");
             
             Command::new("sudo")
-                .args(&["reboot"])
+                .args(["reboot"])
                 .spawn()
                 .map_err(|e| anyhow::anyhow!("Failed to reboot: {}", e))?;
             

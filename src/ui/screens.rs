@@ -1,88 +1,47 @@
 use crate::PixelSorterApp;
+use crate::ui::flight::FlightAnimation;
 use eframe::egui;
 
 impl PixelSorterApp {
-    pub fn render_splash_screen(&mut self, ctx: &egui::Context, elapsed: f32) {
-        // Load logo texture if not loaded yet
-        if self.splash_logo.is_none() {
-            if let Ok(img) = image::open("assets/Harpy_ICON.png") {
-                let rgba = img.to_rgba8();
+    /// Load the Harpy logo texture once (shared by the sleep and wake screens)
+    fn ensure_logo_loaded(&mut self, ctx: &egui::Context) {
+        if self.logo.is_none() {
+            if let Some(rgba) = crate::ui::helpers::load_logo_image() {
                 let size = [rgba.width() as usize, rgba.height() as usize];
-                let pixels = rgba.as_flat_samples();
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-                self.splash_logo = Some(ctx.load_texture("splash_logo", color_image, Default::default()));
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_flat_samples().as_slice());
+                self.logo = Some(ctx.load_texture("harpy_logo", color_image, Default::default()));
             }
         }
+    }
 
-        // Calculate fade alpha (fade in first 0.3s, stay visible, fade out last 0.5s)
-        let alpha = if elapsed < 0.3 {
-            // Fade in
-            elapsed / 0.3
-        } else if elapsed > 1.5 {
-            // Fade out
-            (2.0 - elapsed) / 0.5
-        } else {
-            // Fully visible
-            1.0
-        };
+    /// How long the splash shows: one full wingbeat of the flight animation
+    pub fn splash_duration() -> f32 {
+        FlightAnimation::get().map_or(2.0, FlightAnimation::duration)
+    }
+
+    pub fn render_splash_screen(&mut self, ctx: &egui::Context, elapsed: f32) {
+        // Fade in over the first 0.3s, out over the last 0.5s, stepping with
+        // the animation's 10 fps for a deliberately choppy, frame-by-frame look
+        let total = Self::splash_duration();
+        let t = FlightAnimation::snap(elapsed);
+        let alpha = ((t + 0.1) / 0.3).min((total - t) / 0.5).clamp(0.0, 1.0);
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 let screen_rect = ui.max_rect();
+                ui.painter().rect_filled(screen_rect, 0.0, egui::Color32::BLACK);
 
-                // Black background
-                ui.painter().rect_filled(
-                    screen_rect,
-                    0.0,
-                    egui::Color32::BLACK,
-                );
-
-                // Center content
-                let center = screen_rect.center();
-
-                // Draw logo
-                if let Some(logo_texture) = &self.splash_logo {
-                    let logo_size = 256.0; // Size of the logo
-                    let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
-                        egui::vec2(logo_size, logo_size),
-                    );
-
-                    let tint = egui::Color32::from_white_alpha((alpha * 255.0) as u8);
-                    ui.painter().image(
-                        logo_texture.id(),
-                        logo_rect,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        tint,
-                    );
+                // Full-screen halftone harpy in flight
+                if let Some(flight) = FlightAnimation::get() {
+                    let color = egui::Color32::from_white_alpha((alpha * 255.0) as u8);
+                    flight.paint(ui.painter(), screen_rect, elapsed, color);
                 }
-
-                // Draw "Harpy" text below logo
-                let text = "Harpy";
-                let font_id = egui::FontId::proportional(48.0);
-                let text_color = egui::Color32::from_white_alpha((alpha * 255.0) as u8);
-                let galley = ui.painter().layout_no_wrap(text.to_string(), font_id, text_color);
-
-                let text_pos = egui::pos2(
-                    center.x - galley.size().x / 2.0,
-                    center.y + 120.0,
-                );
-                ui.painter().galley(text_pos, galley);
             });
     }
 
     pub fn render_sleep_screen(&mut self, ctx: &egui::Context) {
-        // Load logo texture if not loaded yet (reuse splash logo or load separately)
-        if self.sleep_logo.is_none() {
-            if let Ok(img) = image::open("assets/Harpy_ICON.png") {
-                let rgba = img.to_rgba8();
-                let size = [rgba.width() as usize, rgba.height() as usize];
-                let pixels = rgba.as_flat_samples();
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-                self.sleep_logo = Some(ctx.load_texture("sleep_logo", color_image, Default::default()));
-            }
-        }
+        self.ensure_logo_loaded(ctx);
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
@@ -103,10 +62,10 @@ impl PixelSorterApp {
                 let center = screen_rect.center();
 
                 // Draw logo (dim for sleep mode)
-                if let Some(logo_texture) = &self.sleep_logo {
-                    let logo_size = 200.0; // Slightly smaller than splash
+                if let Some(logo_texture) = &self.logo {
+                    let logo_size = 320.0; // Slightly smaller than splash
                     let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
+                        egui::pos2(center.x, center.y - 70.0),
                         egui::vec2(logo_size, logo_size),
                     );
 
@@ -128,7 +87,7 @@ impl PixelSorterApp {
 
                 let text_pos = egui::pos2(
                     center.x - galley.size().x / 2.0,
-                    center.y + 100.0,
+                    center.y + 110.0,
                 );
                 ui.painter().galley(text_pos, galley);
 
@@ -140,7 +99,7 @@ impl PixelSorterApp {
 
                 let hint_pos = egui::pos2(
                     center.x - hint_galley.size().x / 2.0,
-                    center.y + 160.0,
+                    center.y + 170.0,
                 );
                 ui.painter().galley(hint_pos, hint_galley);
             });
@@ -162,10 +121,10 @@ impl PixelSorterApp {
                 let center = screen_rect.center();
 
                 // Draw logo (full brightness for waking)
-                if let Some(logo_texture) = &self.sleep_logo {
-                    let logo_size = 200.0;
+                if let Some(logo_texture) = &self.logo {
+                    let logo_size = 320.0;
                     let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
+                        egui::pos2(center.x, center.y - 70.0),
                         egui::vec2(logo_size, logo_size),
                     );
 
@@ -187,7 +146,7 @@ impl PixelSorterApp {
 
                 let text_pos = egui::pos2(
                     center.x - galley.size().x / 2.0,
-                    center.y + 100.0,
+                    center.y + 110.0,
                 );
                 ui.painter().galley(text_pos, galley);
             });
