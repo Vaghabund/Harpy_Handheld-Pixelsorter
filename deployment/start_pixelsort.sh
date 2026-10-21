@@ -2,7 +2,8 @@
 # Harpy Pixel Sorter - Unified Launcher
 # Waits for X11, then starts the application
 
-APP_DIR="/home/pixelsort/Pixelsort"
+# Project root = parent of this script's deployment/ folder
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BINARY="$APP_DIR/target/release/pixelsort-pi"
 MAX_X11_WAIT=30  # Maximum seconds to wait for X11
 RETRY_INTERVAL=0.2  # Check every 200ms

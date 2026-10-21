@@ -24,13 +24,11 @@ impl UpdateManager {
             
             log::info!("Checking for updates in: {}", self.project_path);
             
-            let cmd = format!(
-                "cd {} && git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main",
-                self.project_path
-            );
-            
+            let cmd = "git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main";
+
             let output = Command::new("sh")
-                .args(["-c", &cmd])
+                .args(["-c", cmd])
+                .current_dir(&self.project_path)
                 .output()?;
             
             if !output.status.success() {
@@ -90,8 +88,8 @@ impl UpdateManager {
                 // Fallback: inline update commands (for first-time update when script doesn't exist yet)
                 log::warn!("Update script not found, using fallback inline method");
                 let fallback_cmd = format!(
-                    "sleep 3 && cd {} && git pull origin main && cargo build --release && sudo systemctl restart {}",
-                    self.project_path, service_name
+                    "sleep 3 && git pull origin main && cargo build --release && sudo systemctl restart {}",
+                    service_name
                 );
                 vec!["/bin/sh".into(), "-c".into(), fallback_cmd]
             };

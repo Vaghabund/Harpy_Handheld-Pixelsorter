@@ -15,7 +15,7 @@ impl PixelSorterApp {
         }
         
         // Create session directory
-        let session_dir = PathBuf::from("sorted_images").join(self.current_session_folder.as_ref().unwrap());
+        let session_dir = crate::system::paths::sorted_images_dir().join(self.current_session_folder.as_ref().unwrap());
         std::fs::create_dir_all(&session_dir)?;
         
         // Increment iteration counter for this save
@@ -40,7 +40,7 @@ impl PixelSorterApp {
 
         // Copy sorted_images folder to USB
         let dest_path = usb_path.join("pixelsort_export");
-        Self::copy_directory(PathBuf::from("sorted_images"), dest_path.clone())
+        Self::copy_directory(crate::system::paths::sorted_images_dir(), dest_path.clone())
             .map_err(|e| format!("Copy failed: {}", e))?;
 
         log::info!("Successfully copied to USB: {}", dest_path.display());
@@ -96,7 +96,7 @@ impl PixelSorterApp {
         if let Some(ref session_folder) = self.current_session_folder {
             if self.iteration_counter > 0 {
                 // Load the last saved iteration as the new source
-                let session_dir = PathBuf::from("sorted_images").join(session_folder);
+                let session_dir = crate::system::paths::sorted_images_dir().join(session_folder);
                 
                 // Find the last saved file
                 let iteration_prefix = format!("edit_{:03}_", self.iteration_counter);

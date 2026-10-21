@@ -334,7 +334,7 @@ impl PixelSorterApp {
                                 
                                 // Delete files if checkbox was checked
                                 if self.usb_export_delete_after {
-                                    if let Err(e) = std::fs::remove_dir_all("sorted_images") {
+                                    if let Err(e) = std::fs::remove_dir_all(crate::system::paths::sorted_images_dir()) {
                                         log::error!("Failed to delete images: {}", e);
                                         self.show_message(format!("⚠ Exported but deletion failed: {}", e));
                                     } else {

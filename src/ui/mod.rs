@@ -140,7 +140,7 @@ impl PixelSorterApp {
             is_waking: false,
             wake_start_time: None,
             last_interaction_time: Instant::now(),
-            update_manager: UpdateManager::new("/home/pixelsort/Pixelsort".to_string()),
+            update_manager: UpdateManager::new(crate::system::paths::app_dir().to_string_lossy().into_owned()),
             update_check_time: None,
             startup_check_done: false,
             show_shutdown_menu: false,
