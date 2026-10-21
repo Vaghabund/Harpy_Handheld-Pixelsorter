@@ -119,12 +119,24 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
                         log::warn!("LOW BATTERY WARNING: {:.2}V (threshold: {:.2}V)", 
                                   voltage, config.voltage_threshold);
                         
-                        // Give user 30 seconds warning
+                        // Give user 30 seconds warning, re-checking so plugging in
+                        // a charger (or a transient voltage dip) cancels the shutdown
+                        let mut cancelled = false;
                         for i in (1..=6).rev() {
                             log::warn!("Shutting down in {} seconds...", i * 5);
                             sleep(Duration::from_secs(5)).await;
+                            if let Ok((voltage, is_charging)) = check_battery_voltage(&config) {
+                                if is_charging || voltage >= config.voltage_threshold {
+                                    cancelled = true;
+                                    break;
+                                }
+                            }
                         }
-                        
+                        if cancelled {
+                            log::info!("Battery recovered or charger connected - shutdown cancelled");
+                            continue;
+                        }
+
                         log::error!("Battery critical! Initiating safe shutdown...");
                         SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
                         flag_clone.store(true, Ordering::Relaxed);
