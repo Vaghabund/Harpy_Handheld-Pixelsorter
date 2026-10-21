@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 /// Filesystem types used by USB sticks we can export to
-const USB_FS_TYPES: [&str; 3] = ["vfat", "exfat", "ntfs"];
+/// (ntfs3 is the in-kernel NTFS driver, fuseblk is ntfs-3g)
+const USB_FS_TYPES: [&str; 5] = ["vfat", "exfat", "ntfs", "ntfs3", "fuseblk"];
 
 /// Environment variable naming a folder to treat as a USB drive (desktop development)
 const USB_DIR_ENV: &str = "HARPY_USB_DIR";
