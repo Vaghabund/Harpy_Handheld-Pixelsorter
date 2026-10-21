@@ -57,10 +57,13 @@ impl FlightAnimation {
         self.frames as f32 / FPS
     }
 
-    /// Draw the frame for `elapsed` seconds, centered and fitted into `rect`
+    /// Draw the frame for `elapsed` seconds, centered and covering `rect`
+    /// (the grid overflows and is clipped on the longer side, so the dots
+    /// reach every edge of the screen)
     pub fn paint(&self, painter: &egui::Painter, rect: egui::Rect, elapsed: f32, color: egui::Color32) {
         let frame = (elapsed * FPS) as usize % self.frames;
-        let cell = (rect.width() / COLS as f32).min(rect.height() / ROWS as f32);
+        let cell = (rect.width() / COLS as f32).max(rect.height() / ROWS as f32);
+        let painter = painter.with_clip_rect(rect);
         let origin = rect.center() - egui::vec2(cell * COLS as f32, cell * ROWS as f32) / 2.0;
         let cells = &self.radii[frame * COLS * ROWS..(frame + 1) * COLS * ROWS];
         for (i, &r) in cells.iter().enumerate() {
