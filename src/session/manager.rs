@@ -144,7 +144,7 @@ impl PixelSorterApp {
 
         // Restart camera streaming for new session
         if let Some(ref camera) = self.camera_controller {
-            if let Ok(mut camera_lock) = camera.try_write() {
+            if let Ok(mut camera_lock) = camera.try_lock() {
                 let _ = camera_lock.start_streaming();
             }
         }
