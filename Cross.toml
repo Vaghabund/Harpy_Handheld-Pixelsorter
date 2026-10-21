@@ -1,6 +1,6 @@
 [target.aarch64-unknown-linux-gnu]
 # Use a custom image with GTK and GUI dependencies pre-installed
-image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:0.2.5"  # pinned for reproducible builds
 
 # Pre-build command to install required packages
 pre-build = [

@@ -5,8 +5,8 @@
 # Project root = parent of this script's deployment/ folder
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BINARY="$APP_DIR/target/release/pixelsort-pi"
-MAX_X11_WAIT=30  # Maximum seconds to wait for X11
-RETRY_INTERVAL=0.2  # Check every 200ms
+MAX_X11_WAIT=30     # Maximum seconds to wait for X11
+CHECKS_PER_SECOND=5 # Check every 200ms
 
 # ============================================
 # Step 1: Wait for X11 to be ready
@@ -16,30 +16,27 @@ echo "Harpy Pixel Sorter - Starting..."
 echo "=========================================="
 echo "Waiting for X11 display server..."
 
-elapsed=0
-while [ $(echo "$elapsed < $MAX_X11_WAIT" | bc) -eq 1 ]; do
+x11_ready=false
+for ((i = 0; i < MAX_X11_WAIT * CHECKS_PER_SECOND; i++)); do
     if DISPLAY=:0 xset q &>/dev/null; then
-        echo "✓ X11 ready (${elapsed}s)"
+        echo "✓ X11 ready (after $((i / CHECKS_PER_SECOND))s)"
+        x11_ready=true
         break
     fi
-    sleep $RETRY_INTERVAL
-    elapsed=$(echo "$elapsed + $RETRY_INTERVAL" | bc)
+    sleep 0.2
 done
 
-if [ $(echo "$elapsed >= $MAX_X11_WAIT" | bc) -eq 1 ]; then
+if [ "$x11_ready" != true ]; then
     echo "⚠ X11 timeout after ${MAX_X11_WAIT}s, starting anyway..."
 fi
 
 # ============================================
-# Step 2: Prepare and run application
+# Step 2: Run application
 # ============================================
 cd "$APP_DIR" || {
     echo "ERROR: Could not change to $APP_DIR"
     exit 1
 }
-
-# Ensure git ignores file permission changes
-git config core.fileMode false 2>/dev/null
 
 # Check if binary exists
 if [ ! -f "$BINARY" ]; then
@@ -49,13 +46,7 @@ if [ ! -f "$BINARY" ]; then
 fi
 
 echo "Starting Harpy Pixel Sorter..."
-echo "Updates will be checked in background"
 echo "=========================================="
 
-# Run the application
-"$BINARY"
-
-# Cleanup after exit
-echo ""
-echo "Application closed."
-sleep 2
+# exec: the app replaces this shell so systemd signals (stop/restart) reach it directly
+exec "$BINARY"

@@ -7,9 +7,8 @@ Wants=network.target
 Type=simple
 User=pixelsort
 WorkingDirectory=/home/pixelsort/Pixelsort
-# Unified launcher: waits for X11, then starts app
-ExecStartPre=/bin/chmod +x /home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
-ExecStart=/home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
+# Unified launcher: waits for X11, then execs the app
+ExecStart=/bin/bash /home/pixelsort/Pixelsort/deployment/start_pixelsort.sh
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
