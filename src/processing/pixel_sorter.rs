@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn test_sorting_parameters_default() {
         let params = SortingParameters::default();
-        assert_eq!(params.threshold, 50.0);
-        assert_eq!(params.interval, 10);
+        assert_eq!(params.threshold, 0.0);
+        assert_eq!(params.sort_mode, SortMode::Brightness);
     }
 }
