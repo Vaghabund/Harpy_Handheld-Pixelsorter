@@ -60,7 +60,7 @@ impl Default for UpsConfig {
             enabled: false,  // Disabled by default, enable in config
             i2c_bus: 1,      // Usually /dev/i2c-1 on Pi
             i2c_address: 0x36, // Common address for fuel gauge ICs
-            voltage_threshold: 3.2, // 3.2V per cell (for 2S = 6.4V total)
+            voltage_threshold: 6.4, // Pack voltage: 2S Li-ion at 3.2V per cell
             check_interval_secs: 5,
         }
     }
