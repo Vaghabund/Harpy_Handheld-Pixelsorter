@@ -83,6 +83,7 @@ fn main() -> Result<()> {
 fn setup_touch_style(ctx: &egui::Context) {
     // Force 1.0 zoom to use full resolution (disable DPI scaling)
     ctx.set_zoom_factor(1.0);
+    crate::ui::theme::install_fonts(ctx);
     
     let mut style = (*ctx.style()).clone();
     
