@@ -73,7 +73,11 @@ impl PixelSorterApp {
                 }
             });
 
-        // Show shutdown confirmation menu
+        self.render_power_menu(ctx);
+    }
+
+    /// Power Options window (opened by the power button or a v2 panel)
+    pub fn render_power_menu(&mut self, ctx: &egui::Context) {
         if self.show_shutdown_menu {
             log::debug!("Rendering power menu - show_shutdown_menu is true");
             let style = MenuStyle::power();
