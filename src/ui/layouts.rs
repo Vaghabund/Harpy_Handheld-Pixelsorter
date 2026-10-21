@@ -33,7 +33,6 @@ const HUE_MAX: f32 = 360.0;        // Maximum hue value (degrees)
 
 // USB Export button
 const USB_BUTTON_SCALE: f32 = 0.7;           // USB button size relative to normal buttons (0.7 = 70%)
-const USB_BUTTON_Y_OFFSET_DIVISOR: f32 = 2.0; // Y position offset (spacing divided by this value)
 
 // Crop Phase - Button positioning
 const CROP_BUTTON_VERTICAL_SPACING_MULTIPLIER: f32 = 2.0; // Spacing between Cancel/Apply buttons
@@ -186,15 +185,17 @@ impl PixelSorterApp {
                 }
             });
 
-        // Optional: USB export button if USB present (uses the throttled check
-        // from render_ui; probing here would spawn `mount` and write to the stick every frame)
+        // Optional: USB export button if USB present (uses the throttled background
+        // check), at the end of row 2, vertically centred on the row
         if self.prev_usb_present {
-            let export_y = screen_rect.max.y - btn_sizes.normal_radius - btn_sizes.spacing / USB_BUTTON_Y_OFFSET_DIVISOR;
+            let usb_radius = btn_sizes.normal_radius * USB_BUTTON_SCALE;
+            let export_x = btn_sizes.spacing + (btn_sizes.normal_radius * 2.0 + btn_sizes.spacing) * EDIT_BUTTON_COLUMNS;
+            let export_y = row2_y + btn_sizes.normal_radius - usb_radius;
             egui::Area::new("export_btn")
-                .fixed_pos(egui::pos2(btn_sizes.spacing, export_y))
+                .fixed_pos(egui::pos2(export_x, export_y))
                 .order(egui::Order::Background)
                 .show(ctx, |ui| {
-                    if circular_button(ui, btn_sizes.normal_radius * USB_BUTTON_SCALE, "USB", button_green()) {
+                    if circular_button(ui, usb_radius, "USB", button_green()) {
                         self.open_usb_export_dialog();
                     }
                 });
