@@ -22,7 +22,8 @@ impl PixelSorterApp {
                     self.create_processed_texture(ctx, sorted);
                     self.is_processing = false;
                 }
-                Err(_e) => {
+                Err(e) => {
+                    log::error!("Pixel sort failed: {}", e);
                     self.is_processing = false;
                 }
             }
@@ -91,8 +92,10 @@ impl PixelSorterApp {
                     self.preview_mode = false;
                     self.current_phase = crate::ui::Phase::Edit; // Switch to edit phase
                 }
-                Err(_e) => {
-                    // Failed to load, silently ignore
+                Err(e) => {
+                    log::error!("Failed to load {}: {}", path.display(), e);
+                    self.export_message = Some(format!("✗ Could not open image: {}", e));
+                    self.export_message_time = Some(std::time::Instant::now());
                 }
             }
         }
