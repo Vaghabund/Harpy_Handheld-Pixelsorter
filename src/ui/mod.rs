@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use eframe::egui;
-use tokio::sync::RwLock;
+use std::sync::Mutex;
 
 use crate::system::UpdateManager;
 use crate::processing::{PixelSorter, SortingAlgorithm, SortingParameters};
@@ -43,7 +43,7 @@ pub struct PixelSorterApp {
     pub is_processing: bool,
     
     // Camera
-    pub camera_controller: Option<Arc<RwLock<CameraController>>>,
+    pub camera_controller: Option<Arc<Mutex<CameraController>>>,
     pub last_camera_update: Option<Instant>,
     
     // Crop state
@@ -103,11 +103,11 @@ pub struct PixelSorterApp {
 impl PixelSorterApp {
     pub fn new(
         pixel_sorter: Arc<PixelSorter>,
-        camera_controller: Option<Arc<RwLock<CameraController>>>,
+        camera_controller: Option<Arc<Mutex<CameraController>>>,
     ) -> Self {
         // Start camera streaming if available
         if let Some(ref camera) = camera_controller {
-            if let Ok(mut camera_lock) = camera.try_write() {
+            if let Ok(mut camera_lock) = camera.try_lock() {
                 let _ = camera_lock.start_streaming();
             }
         }
@@ -347,7 +347,7 @@ impl PixelSorterApp {
 
         if should_update {
             if let Some(camera) = self.camera_controller.clone() {
-                if let Ok(mut camera_lock) = camera.try_write() {
+                if let Ok(mut camera_lock) = camera.try_lock() {
                     if let Ok(Some(preview_image)) = camera_lock.get_fast_preview_image() {
                         self.update_camera_texture(ctx, &preview_image);
                         self.last_camera_update = Some(now);

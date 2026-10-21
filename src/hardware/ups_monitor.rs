@@ -2,17 +2,20 @@
 // Monitors I2C-based UPS HAT for low battery warnings
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
-use tokio::time::sleep;
+use std::thread::sleep;
 
 // Shared flag to signal shutdown request
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 // Shared battery status
-lazy_static::lazy_static! {
-    static ref BATTERY_STATUS: Arc<Mutex<BatteryStatus>> = Arc::new(Mutex::new(BatteryStatus::default()));
-}
+static BATTERY_STATUS: Mutex<BatteryStatus> = Mutex::new(BatteryStatus {
+    voltage: 0.0,
+    percentage: 0.0,
+    is_charging: false,
+    is_available: false,
+});
 
 /// Battery status information
 #[derive(Clone, Debug)]
@@ -73,7 +76,7 @@ pub fn start_monitoring(config: UpsConfig) {
         return;
     }
 
-    tokio::spawn(async move {
+    std::thread::spawn(move || {
         log::info!("UPS monitoring started (I2C bus {}, address 0x{:02X})", 
                    config.i2c_bus, config.i2c_address);
         
@@ -92,7 +95,7 @@ pub fn start_monitoring(config: UpsConfig) {
         }
         
         loop {
-            sleep(Duration::from_secs(config.check_interval_secs)).await;
+            sleep(Duration::from_secs(config.check_interval_secs));
             
             // Check battery status
             match check_battery_voltage(&config) {
@@ -121,7 +124,7 @@ pub fn start_monitoring(config: UpsConfig) {
                         let mut cancelled = false;
                         for i in (1..=6).rev() {
                             log::warn!("Shutting down in {} seconds...", i * 5);
-                            sleep(Duration::from_secs(5)).await;
+                            sleep(Duration::from_secs(5));
                             if let Ok((voltage, is_charging)) = check_battery_voltage(&config) {
                                 if is_charging || voltage >= config.voltage_threshold {
                                     cancelled = true;

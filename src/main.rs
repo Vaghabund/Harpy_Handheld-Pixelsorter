@@ -2,7 +2,7 @@ use anyhow::Result;
 use eframe::egui;
 use log::info;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::Mutex;
 
 // Domain modules
 mod hardware;
@@ -15,9 +15,7 @@ use crate::processing::PixelSorter;
 use crate::ui::PixelSorterApp;
 use crate::hardware::{CameraController, UpsConfig};
 
-#[tokio::main]
-#[allow(clippy::arc_with_non_send_sync)]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Set up logging (Info level for production)
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
@@ -37,7 +35,7 @@ async fn main() -> Result<()> {
     // Initialize Camera controller  
     let camera_controller = match CameraController::new() {
         Ok(controller) => {
-            Some(Arc::new(RwLock::new(controller)))
+            Some(Arc::new(Mutex::new(controller)))
         }
         Err(e) => {
             log::error!("Camera initialization failed: {}. Camera features disabled.", e);
