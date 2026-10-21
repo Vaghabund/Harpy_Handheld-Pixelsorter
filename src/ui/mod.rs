@@ -13,6 +13,7 @@ use background::{take_finished, BackgroundTask};
 // Module declarations
 pub mod background;
 mod files;
+mod flight;
 mod state;
 mod thumbnails;
 pub mod helpers;
@@ -71,7 +72,7 @@ pub struct PixelSorterApp {
     pub export_message: Option<String>,
     pub export_message_time: Option<Instant>,
     
-    // Harpy logo (splash, sleep and wake screens)
+    // Harpy logo (sleep and wake screens)
     pub logo: Option<egui::TextureHandle>,
 
     // Splash screen
@@ -241,11 +242,11 @@ impl eframe::App for PixelSorterApp {
                 }
             });
         
-        // Show splash screen for 2 seconds
+        // Show the splash animation for one wingbeat
         if self.show_splash {
             if let Some(start_time) = self.splash_start_time {
                 let elapsed = start_time.elapsed().as_secs_f32();
-                if elapsed > 2.0 {
+                if elapsed > Self::splash_duration() {
                     self.show_splash = false;
                 } else {
                     self.render_splash_screen(ctx, elapsed);
