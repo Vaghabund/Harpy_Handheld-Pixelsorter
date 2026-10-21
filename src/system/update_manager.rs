@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 /// Manages application updates via git
-#[allow(dead_code)]
 pub struct UpdateManager {
     /// Whether an update is available
     pub update_available: bool,
@@ -31,7 +30,7 @@ impl UpdateManager {
             );
             
             let output = Command::new("sh")
-                .args(&["-c", &cmd])
+                .args(["-c", &cmd])
                 .output()?;
             
             if !output.status.success() {
@@ -54,15 +53,15 @@ impl UpdateManager {
                 if local != remote {
                     log::info!("Update available: {} -> {}", &local[..7.min(local.len())], &remote[..7.min(remote.len())]);
                     self.update_available = true;
-                    return Ok(true);
+                    Ok(true)
                 } else {
                     log::info!("App is up to date: {}", &local[..7.min(local.len())]);
                     self.update_available = false;
-                    return Ok(false);
+                    Ok(false)
                 }
             } else {
                 log::error!("Unexpected git output format. Got {} lines", lines.len());
-                return Err(anyhow::anyhow!("Unexpected git output format"));
+                Err(anyhow::anyhow!("Unexpected git output format"))
             }
         }
         

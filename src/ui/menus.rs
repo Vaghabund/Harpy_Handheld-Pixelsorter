@@ -41,7 +41,7 @@ impl PixelSorterApp {
                 ui.painter().circle_filled(center, scaled_radius, bg_color);
 
                 // Power symbol: partial circle (arc) + line
-                let stroke = egui::Stroke::new(6.0, egui::Color32::WHITE); // Doubled from 3.0
+                let stroke = egui::Stroke::new(6.0_f32, egui::Color32::WHITE); // Doubled from 3.0
 
                 // Vertical line (power button line)
                 let line_start = egui::pos2(center.x, center.y - radius * 0.8);

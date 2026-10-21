@@ -76,7 +76,7 @@ impl PixelSorterApp {
                             ui.painter().rect_stroke(
                                 icon_rect,
                                 4.0, // Doubled from 2.0
-                                egui::Stroke::new(4.0, egui::Color32::WHITE), // Doubled from 2.0
+                                egui::Stroke::new(4.0_f32, egui::Color32::WHITE), // Doubled from 2.0
                             );
 
                             // Draw battery fill

@@ -89,7 +89,6 @@ impl PixelSorterApp {
                     self.original_image = Some(rgb_image.clone());
                     self.processed_image = Some(rgb_image.clone());
                     self.create_processed_texture(ctx, rgb_image);
-                    self.preview_mode = false;
                     self.current_phase = crate::ui::Phase::Edit; // Switch to edit phase
                 }
                 Err(e) => {

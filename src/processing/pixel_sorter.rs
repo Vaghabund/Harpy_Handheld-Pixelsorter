@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use anyhow::Result;
 use image::{Rgb, RgbImage};
 
@@ -67,9 +66,7 @@ impl SortingAlgorithm {
 #[derive(Debug, Clone)]
 pub struct SortingParameters {
     pub threshold: f32,
-    pub hue_shift: f32,
     pub color_tint: f32,
-    pub tint_strength: f32,
     pub sort_mode: SortMode,
 }
 
@@ -77,9 +74,7 @@ impl Default for SortingParameters {
     fn default() -> Self {
         Self {
             threshold: 0.0,  // Start with no threshold (sort all pixels)
-            hue_shift: 0.0,
             color_tint: 0.0,
-            tint_strength: 0.3,
             sort_mode: SortMode::Brightness,
         }
     }
@@ -98,15 +93,7 @@ impl PixelSorter {
         algorithm: SortingAlgorithm,
         params: &SortingParameters,
     ) -> Result<RgbImage> {
-        let (_width, _height) = image.dimensions();
         let mut result = image.clone();
-
-        // Apply color effects first if needed
-        if params.hue_shift != 0.0 {
-            self.apply_hue_shift(&mut result, params.hue_shift);
-        }
-        
-        // Tint is now only applied as a display filter, not during pixel sorting
 
         match algorithm {
             SortingAlgorithm::Horizontal => self.sort_horizontal(&mut result, params),
@@ -242,152 +229,6 @@ impl PixelSorter {
         0.299 * r + 0.587 * g + 0.114 * b
     }
 
-    pub fn preview_sort(
-        &self,
-        image: &RgbImage,
-        algorithm: SortingAlgorithm,
-        params: &SortingParameters,
-    ) -> Result<RgbImage> {
-        // Create a faster preview by processing at lower resolution
-        let (_width, _height) = image.dimensions();
-        
-        let preview_params = SortingParameters {
-            threshold: params.threshold,
-            hue_shift: params.hue_shift,
-            color_tint: params.color_tint,
-            tint_strength: params.tint_strength,
-            sort_mode: params.sort_mode,
-        };
-        
-        self.sort_pixels(image, algorithm, &preview_params)
-    }
-
-    fn apply_hue_shift(&self, image: &mut RgbImage, hue_shift: f32) {
-        let (width, height) = image.dimensions();
-        
-        for y in 0..height {
-            for x in 0..width {
-                let pixel = image.get_pixel(x, y);
-                let shifted_pixel = self.shift_pixel_hue(pixel, hue_shift);
-                image.put_pixel(x, y, shifted_pixel);
-            }
-        }
-    }
-
-    fn shift_pixel_hue(&self, pixel: &Rgb<u8>, hue_shift: f32) -> Rgb<u8> {
-        // Convert RGB to HSV
-        let r = pixel[0] as f32 / 255.0;
-        let g = pixel[1] as f32 / 255.0;
-        let b = pixel[2] as f32 / 255.0;
-
-        let max = r.max(g.max(b));
-        let min = r.min(g.min(b));
-        let delta = max - min;
-
-        let mut h = if delta == 0.0 {
-            0.0
-        } else if max == r {
-            60.0 * (((g - b) / delta) % 6.0)
-        } else if max == g {
-            60.0 * (((b - r) / delta) + 2.0)
-        } else {
-            60.0 * (((r - g) / delta) + 4.0)
-        };
-
-        if h < 0.0 {
-            h += 360.0;
-        }
-
-        let s = if max == 0.0 { 0.0 } else { delta / max };
-        let v = max;
-
-        // Apply hue shift
-        h = (h + hue_shift) % 360.0;
-        if h < 0.0 {
-            h += 360.0;
-        }
-
-        // Convert HSV back to RGB
-        let c = v * s;
-        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
-        let m = v - c;
-
-        let (r_prime, g_prime, b_prime) = if h < 60.0 {
-            (c, x, 0.0)
-        } else if h < 120.0 {
-            (x, c, 0.0)
-        } else if h < 180.0 {
-            (0.0, c, x)
-        } else if h < 240.0 {
-            (0.0, x, c)
-        } else if h < 300.0 {
-            (x, 0.0, c)
-        } else {
-            (c, 0.0, x)
-        };
-
-        let r_final = ((r_prime + m) * 255.0).round() as u8;
-        let g_final = ((g_prime + m) * 255.0).round() as u8;
-        let b_final = ((b_prime + m) * 255.0).round() as u8;
-
-        Rgb([r_final, g_final, b_final])
-    }
-
-    fn apply_color_tint(&self, image: &mut RgbImage, tint_hue: f32, strength: f32) {
-        let (width, height) = image.dimensions();
-        // Convert tint hue to RGB color
-        let tint_color = hue_to_rgb_pixel(tint_hue);
-        for y in 0..height {
-            for x in 0..width {
-                let pixel = image.get_pixel(x, y);
-                let tinted_pixel = self.blend_with_tint(pixel, &tint_color, strength);
-                image.put_pixel(x, y, tinted_pixel);
-            }
-        }
-    }
-
-    fn blend_with_tint(&self, original: &Rgb<u8>, tint: &Rgb<u8>, strength: f32) -> Rgb<u8> {
-        // Use overlay/multiply blending to tint whites and all colors
-        let strength = strength.clamp(0.0, 1.0);
-        
-        let orig_r = original[0] as f32 / 255.0;
-        let orig_g = original[1] as f32 / 255.0;
-        let orig_b = original[2] as f32 / 255.0;
-        
-        let tint_r = tint[0] as f32 / 255.0;
-        let tint_g = tint[1] as f32 / 255.0;
-        let tint_b = tint[2] as f32 / 255.0;
-        
-        // Color overlay blend - tints whites while preserving contrast
-        let blend_r = if orig_r < 0.5 {
-            2.0 * orig_r * tint_r
-        } else {
-            1.0 - 2.0 * (1.0 - orig_r) * (1.0 - tint_r)
-        };
-        
-        let blend_g = if orig_g < 0.5 {
-            2.0 * orig_g * tint_g
-        } else {
-            1.0 - 2.0 * (1.0 - orig_g) * (1.0 - tint_g)
-        };
-        
-        let blend_b = if orig_b < 0.5 {
-            2.0 * orig_b * tint_b
-        } else {
-            1.0 - 2.0 * (1.0 - orig_b) * (1.0 - tint_b)
-        };
-        
-        // Mix with original based on strength
-        let final_r = (orig_r * (1.0 - strength) + blend_r * strength).clamp(0.0, 1.0);
-        let final_g = (orig_g * (1.0 - strength) + blend_g * strength).clamp(0.0, 1.0);
-        let final_b = (orig_b * (1.0 - strength) + blend_b * strength).clamp(0.0, 1.0);
-        
-        Rgb([
-            (final_r * 255.0).round() as u8,
-            (final_g * 255.0).round() as u8,
-            (final_b * 255.0).round() as u8,
-        ])
-    }
 }
 
 /// Convert a hue value (0-360) to RGB (u8, u8, u8)

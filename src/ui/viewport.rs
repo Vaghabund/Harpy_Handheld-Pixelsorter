@@ -157,7 +157,7 @@ impl PixelSorterApp {
         );
 
         // Draw crop border
-        painter.rect_stroke(crop_display, 0.0, egui::Stroke::new(3.0, egui::Color32::WHITE));
+        painter.rect_stroke(crop_display, 0.0, egui::Stroke::new(3.0_f32, egui::Color32::WHITE));
 
         // Draw handles
         self.draw_crop_handles(painter, crop_display);
@@ -271,7 +271,7 @@ impl PixelSorterApp {
 
         for center in handles {
             painter.circle_filled(center, HANDLE_SIZE / 2.0, handle_color);
-            painter.circle_stroke(center, HANDLE_SIZE / 2.0, egui::Stroke::new(2.0, egui::Color32::BLACK));
+            painter.circle_stroke(center, HANDLE_SIZE / 2.0, egui::Stroke::new(2.0_f32, egui::Color32::BLACK));
         }
     }
 }

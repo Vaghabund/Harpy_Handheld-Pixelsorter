@@ -13,7 +13,6 @@ impl PixelSorterApp {
                         self.original_image = Some(frame.clone());
                         self.processed_image = Some(frame.clone());
                         self.create_processed_texture(ctx, frame);
-                        self.preview_mode = false;
                         self.current_phase = crate::ui::Phase::Edit; // Switch to edit phase
                     }
                     Err(e) => {

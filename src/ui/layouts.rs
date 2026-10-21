@@ -6,7 +6,6 @@ use crate::PixelSorterApp;
 use crate::ui::state::Phase;
 use crate::ui::components::{circular_button, circular_button_default, circular_button_light, vertical_slider, slider_knob_radius};
 use crate::ui::styles::{ButtonSizes, SliderSizes, button_dark, button_green, button_red, button_fill_normal};
-use crate::processing::SortingAlgorithm;
 use eframe::egui;
 
 // ============================================================================
@@ -111,7 +110,7 @@ impl PixelSorterApp {
             .order(egui::Order::Background)
             .show(ctx, |ui| {
                 if circular_button_light(ui, btn_sizes.normal_radius, self.current_algorithm.name(), button_fill_normal()) {
-                    self.cycle_algorithm();
+                    self.current_algorithm = self.current_algorithm.next();
                     self.apply_pixel_sort(ctx);
                 }
             });
@@ -283,16 +282,5 @@ impl PixelSorterApp {
             self.sorting_params.color_tint = color_tint;
             self.apply_pixel_sort(ctx);
         }
-    }
-
-    // ============================================================================
-    // HELPER METHODS
-    // ============================================================================
-
-    pub fn cycle_algorithm(&mut self) {
-        let all = SortingAlgorithm::all();
-        let idx = all.iter().position(|&a| a == self.current_algorithm).unwrap_or(0);
-        let next_idx = (idx + 1) % all.len();
-        self.current_algorithm = all[next_idx];
     }
 }

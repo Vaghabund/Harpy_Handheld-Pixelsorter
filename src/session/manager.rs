@@ -140,7 +140,6 @@ impl PixelSorterApp {
         self.camera_texture = None;
         self.processed_texture = None;
         self.last_camera_update = None; // Reset camera timer to immediately start fresh
-        self.preview_mode = true;
         self.current_phase = crate::ui::Phase::Input; // Return to Input phase
 
         // Restart camera streaming for new session
@@ -165,13 +164,11 @@ impl PixelSorterApp {
                     if filename.starts_with(&iteration_prefix) {
                         // Load this image as the new original
                         let image_path = entry.path();
-                        match image::open(&image_path) {
-                            Ok(img) => {
-                                let rgb_image = img.to_rgb8();
-                                self.original_image = Some(rgb_image);
-                                return Ok(());
-                            }
-                            Err(e) => return Err(e.into()),
+                        {
+                            let img = image::open(&image_path)?;
+                            let rgb_image = img.to_rgb8();
+                            self.original_image = Some(rgb_image);
+                            return Ok(());
                         }
                     }
                 }

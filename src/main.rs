@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     let ups_config = load_ups_config();
     
     // Start UPS monitoring (runs in background)
-    let _shutdown_flag = hardware::start_monitoring(ups_config);
+    hardware::start_monitoring(ups_config);
     
     // Initialize components
     let pixel_sorter = Arc::new(PixelSorter::new());

@@ -45,7 +45,6 @@ pub struct PixelSorterApp {
     // Camera
     pub camera_controller: Option<Arc<RwLock<CameraController>>>,
     pub last_camera_update: Option<Instant>,
-    pub preview_mode: bool,
     
     // Crop state
     pub crop_rect: Option<egui::Rect>, // In image coordinates
@@ -125,7 +124,6 @@ impl PixelSorterApp {
             is_processing: false,
             camera_controller,
             last_camera_update: None,
-            preview_mode: true,
             crop_rect: None,
             drag_state: DragState::None,
             iteration_counter: 0,

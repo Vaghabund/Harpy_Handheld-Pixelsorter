@@ -289,7 +289,7 @@ fn render_value_bubble(ui: &egui::Ui, knob_y: f32, slider_left: f32, value: f32)
         bubble_rect,
         BUBBLE_CORNER_RADIUS,
         bubble_background(),
-        egui::Stroke::new(1.0, bubble_border()),
+        egui::Stroke::new(1.0_f32, bubble_border()),
     );
 
     let text_pos = bubble_rect.center() - galley.size() / 2.0;
