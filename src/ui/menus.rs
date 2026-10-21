@@ -220,7 +220,12 @@ impl PixelSorterApp {
                                 self.show_developer_menu = false;
 
                                 // Pull updates and restart service using update_manager
-                                let _ = self.update_manager.pull_and_restart_service("pixelsort-kiosk");
+                                // (only returns if the update could not be started)
+                                if let Err(e) = self.update_manager.pull_and_restart_service("pixelsort-kiosk") {
+                                    log::error!("Failed to start update: {}", e);
+                                    self.export_message = Some(format!("✗ Update failed: {}", e));
+                                    self.export_message_time = Some(Instant::now());
+                                }
                             }
                         } else {
                             ui.label(egui::RichText::new("✅ App is up to date").color(egui::Color32::GRAY).size(style.label_size));

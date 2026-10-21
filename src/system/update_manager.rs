@@ -83,14 +83,10 @@ impl UpdateManager {
             log::info!("Starting update process for service: {}", service_name);
             
             let update_script = format!("{}/deployment/update_and_rebuild.sh", self.project_path);
-            
-            // Check if update script exists
-            if Path::new(&update_script).exists() {
-                // Use the proper update script
+
+            let update_cmd: Vec<String> = if Path::new(&update_script).exists() {
                 log::info!("Spawning background update script: {}", update_script);
-                Command::new("sh")
-                    .args(&[&update_script, &self.project_path, service_name])
-                    .spawn()?;
+                vec!["/bin/sh".into(), update_script, self.project_path.clone(), service_name.into()]
             } else {
                 // Fallback: inline update commands (for first-time update when script doesn't exist yet)
                 log::warn!("Update script not found, using fallback inline method");
@@ -98,11 +94,34 @@ impl UpdateManager {
                     "sleep 3 && cd {} && git pull origin main && cargo build --release && sudo systemctl restart {}",
                     self.project_path, service_name
                 );
-                Command::new("sh")
-                    .args(&["-c", &fallback_cmd])
-                    .spawn()?;
+                vec!["/bin/sh".into(), "-c".into(), fallback_cmd]
+            };
+
+            // Run the update in its own transient systemd unit. A plain child process
+            // lives in the kiosk service's cgroup and is killed by systemd as soon as
+            // this app exits and the service stops, aborting the pull/rebuild.
+            let user = std::env::var("USER").unwrap_or_else(|_| "pixelsort".to_string());
+            let home = std::env::var("HOME").unwrap_or_else(|_| format!("/home/{}", user));
+            let path = format!("{}:{}/.cargo/bin", std::env::var("PATH").unwrap_or_default(), home);
+
+            let status = Command::new("sudo")
+                .args([
+                    "systemd-run",
+                    "--unit=pixelsort-update",
+                    "--collect",
+                    &format!("--uid={}", user),
+                    &format!("--gid={}", user),
+                    &format!("--working-directory={}", self.project_path),
+                    &format!("--setenv=HOME={}", home),
+                    &format!("--setenv=PATH={}", path),
+                ])
+                .args(&update_cmd)
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!("systemd-run failed to start update ({})", status));
             }
-            
+
             log::info!("Background update spawned - exiting app to allow rebuild");
             
             // Exit immediately to allow the background script to rebuild
