@@ -27,11 +27,6 @@ impl SortMode {
             SortMode::White => "White",
         }
     }
-    pub fn next(&self) -> SortMode {
-        let all = Self::all();
-        let idx = all.iter().position(|x| x == self).unwrap();
-        all[(idx + 1) % all.len()]
-    }
 }
 
 impl std::fmt::Display for SortingAlgorithm {
@@ -57,11 +52,6 @@ impl SortingAlgorithm {
         }
     }
 
-    pub fn next(&self) -> SortingAlgorithm {
-        let all = Self::all();
-        let current_index = all.iter().position(|&x| std::mem::discriminant(&x) == std::mem::discriminant(self)).unwrap();
-        all[(current_index + 1) % all.len()]
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -203,10 +193,12 @@ impl LineBuffers {
         self.segment.clear();
         self.segment.extend((start..end).map(|i| {
             let px = self.pixels[i];
+            let luminance = self.brightness[i].round() as u8;
             let key = match mode {
-                SortMode::Brightness => self.brightness[i].round() as u8,
-                SortMode::Black => px[0],
-                SortMode::White => 255 - px[0],
+                // Dark to light
+                SortMode::Brightness | SortMode::Black => luminance,
+                // Light to dark
+                SortMode::White => 255 - luminance,
             };
             (key, px)
         }));
@@ -276,17 +268,30 @@ mod tests {
     }
 
     #[test]
-    fn test_algorithm_cycling() {
-        let algorithm = SortingAlgorithm::Horizontal;
-        let next = algorithm.next();
-        assert_eq!(next.name(), "Vertical");
-    }
-
-    #[test]
     fn test_sorting_parameters_default() {
         let params = SortingParameters::default();
         assert_eq!(params.threshold, 0.0);
         assert_eq!(params.sort_mode, SortMode::Brightness);
+    }
+
+    fn sort_row(pixels: &[[u8; 3]], sort_mode: SortMode) -> Vec<[u8; 3]> {
+        let image = RgbImage::from_fn(pixels.len() as u32, 1, |x, _| Rgb(pixels[x as usize]));
+        // Threshold above the max luminance difference: the whole row is one interval
+        let params = SortingParameters { threshold: 256.0, sort_mode, ..Default::default() };
+        let sorted = PixelSorter::new().sort_pixels(&image, SortingAlgorithm::Horizontal, &params).unwrap();
+        sorted.pixels().map(|p| p.0).collect()
+    }
+
+    #[test]
+    fn black_and_white_modes_order_by_luminance() {
+        // Pure blue is dark (low luminance) despite its 255 channel; the old
+        // red-channel key sorted it next to black
+        let (black, blue, red, white) = ([0, 0, 0], [0, 0, 255], [255, 0, 0], [255, 255, 255]);
+        let row = [white, red, black, blue];
+
+        assert_eq!(sort_row(&row, SortMode::Black), vec![black, blue, red, white]);
+        assert_eq!(sort_row(&row, SortMode::White), vec![white, red, blue, black]);
+        assert_eq!(sort_row(&row, SortMode::Brightness), sort_row(&row, SortMode::Black));
     }
 
     /// The original (pre-optimisation) implementation, kept to verify the
@@ -390,8 +395,8 @@ mod tests {
                     let b = self.pixel_brightness(pixel);
                     b.round() as u8
                 },
-                SortMode::Black => pixel[0],
-                SortMode::White => 255 - pixel[0],
+                SortMode::Black => self.pixel_brightness(pixel).round() as u8,
+                SortMode::White => 255 - self.pixel_brightness(pixel).round() as u8,
             }
         }
 

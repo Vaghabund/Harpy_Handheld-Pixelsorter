@@ -16,19 +16,25 @@ impl UpdateManager {
         }
     }
     
-    /// Check if updates are available by comparing local and remote git commits
-    pub fn check_for_updates(&mut self) -> Result<bool> {
+    pub fn project_path(&self) -> &str {
+        &self.project_path
+    }
+
+    /// Check if updates are available by comparing local and remote git commits.
+    /// Runs `git fetch` (network), so call it off the UI thread.
+    pub fn check_for_updates(project_path: &str) -> Result<bool> {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
             
-            log::info!("Checking for updates in: {}", self.project_path);
+            log::info!("Checking for updates in: {}", project_path);
             
-            let cmd = "git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main";
+            // timeout: don't hang forever on a dead network
+            let cmd = "timeout 60 git fetch origin main 2>&1 && git rev-parse HEAD && git rev-parse origin/main";
 
             let output = Command::new("sh")
                 .args(["-c", cmd])
-                .current_dir(&self.project_path)
+                .current_dir(project_path)
                 .output()?;
             
             if !output.status.success() {
@@ -50,11 +56,9 @@ impl UpdateManager {
                 
                 if local != remote {
                     log::info!("Update available: {} -> {}", &local[..7.min(local.len())], &remote[..7.min(remote.len())]);
-                    self.update_available = true;
                     Ok(true)
                 } else {
                     log::info!("App is up to date: {}", &local[..7.min(local.len())]);
-                    self.update_available = false;
                     Ok(false)
                 }
             } else {
@@ -65,6 +69,7 @@ impl UpdateManager {
         
         #[cfg(not(target_os = "linux"))]
         {
+            let _ = project_path;
             log::warn!("Update checking only available on Linux");
             Ok(false)
         }
