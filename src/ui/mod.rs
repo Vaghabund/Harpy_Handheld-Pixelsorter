@@ -6,11 +6,19 @@ use std::sync::Mutex;
 use crate::system::UpdateManager;
 use crate::processing::{PixelSorter, SortingAlgorithm, SortingParameters};
 use crate::hardware::CameraController;
+use crate::processing::image_ops::SortJob;
+use crate::session::manager::UsbExportResult;
+use background::{take_finished, BackgroundTask};
 
 // Module declarations
+pub mod background;
+mod files;
+mod flight;
 mod state;
+mod thumbnails;
 pub mod helpers;
-mod components;  // Consolidated button + slider rendering
+pub mod controls;
+pub mod theme;   // v2 look: fonts, colours, shared widgets
 mod layouts;     // Phase-specific positioning
 mod screens;
 mod indicators;
@@ -18,6 +26,7 @@ mod menus;
 mod viewport;
 mod styles;
 mod camera;
+mod sheets;
 
 // Re-export public types
 pub use state::{Phase, DragState};
@@ -41,10 +50,14 @@ pub struct PixelSorterApp {
     pub current_algorithm: SortingAlgorithm,
     pub sorting_params: SortingParameters,
     pub is_processing: bool,
+    pub sort_job: Option<SortJob>,
+    /// Settings changed while a sort was running: sort again when it finishes
+    pub sort_pending: bool,
     
     // Camera
     pub camera_controller: Option<Arc<Mutex<CameraController>>>,
     pub last_camera_update: Option<Instant>,
+    pub capture_task: Option<BackgroundTask<anyhow::Result<image::RgbImage>>>,
     
     // Crop state
     pub crop_rect: Option<egui::Rect>, // In image coordinates
@@ -53,12 +66,15 @@ pub struct PixelSorterApp {
     // Session management
     pub iteration_counter: u32,
     pub current_session_folder: Option<String>,
+    /// The current image has edits that haven't been saved (Iterate) yet
+    pub has_unsaved_changes: bool,
+    pub show_new_session_dialog: bool,
     
     // Export status
     pub export_message: Option<String>,
     pub export_message_time: Option<Instant>,
     
-    // Harpy logo (splash, sleep and wake screens)
+    // Harpy logo (sleep and wake screens)
     pub logo: Option<egui::TextureHandle>,
 
     // Splash screen
@@ -79,20 +95,33 @@ pub struct PixelSorterApp {
     pub update_manager: UpdateManager,
     pub update_check_time: Option<Instant>,
     pub startup_check_done: bool,
+    pub update_check_task: Option<BackgroundTask<anyhow::Result<bool>>>,
+    /// Show the result of the running update check as a toast
+    pub update_check_manual: bool,
     
     // Shutdown menu
     pub show_shutdown_menu: bool,
     // Track previous USB presence to detect new mounts
     pub prev_usb_present: bool,
     pub last_usb_check: Option<Instant>,
+    pub usb_check_task: Option<BackgroundTask<bool>>,
 
     // USB export dialog
     pub show_usb_export_dialog: bool,
     pub usb_export_delete_after: bool,
+    /// Sessions offered in the export dialog, with their selection
+    pub usb_export_choices: Vec<(crate::session::library::SessionFolder, bool)>,
+    pub usb_export_task: Option<BackgroundTask<UsbExportResult>>,
     
     // Developer menu
     pub show_developer_menu: bool,
     
+    // In-app gallery and USB browser
+    pub files: files::FileManager,
+
+    // v2 camera/edit controls: edge panels and drag dial
+    pub controls: controls::ControlsState,
+
     // Other
     pub tint_enabled: bool,
 }
@@ -123,12 +152,17 @@ impl PixelSorterApp {
             current_algorithm: SortingAlgorithm::Horizontal,
             sorting_params: SortingParameters::default(),
             is_processing: false,
+            sort_job: None,
+            sort_pending: false,
             camera_controller,
             last_camera_update: None,
+            capture_task: None,
             crop_rect: None,
             drag_state: DragState::None,
             iteration_counter: 0,
             current_session_folder: None,
+            has_unsaved_changes: false,
+            show_new_session_dialog: false,
             export_message: None,
             export_message_time: None,
             logo: None,
@@ -143,18 +177,21 @@ impl PixelSorterApp {
             update_manager: UpdateManager::new(crate::system::paths::app_dir().to_string_lossy().into_owned()),
             update_check_time: None,
             startup_check_done: false,
+            update_check_task: None,
+            update_check_manual: false,
             show_shutdown_menu: false,
             prev_usb_present: false,
             last_usb_check: None,
+            usb_check_task: None,
             show_usb_export_dialog: false,
             usb_export_delete_after: false,
+            usb_export_choices: Vec::new(),
+            usb_export_task: None,
             show_developer_menu: false,
             tint_enabled: false,
+            controls: controls::ControlsState::default(),
+            files: files::FileManager::default(),
         }
-    }
-
-    fn usb_present(&self) -> bool {
-        crate::system::usb::find_writable_usb_mount().is_some()
     }
 }
 
@@ -171,6 +208,9 @@ impl eframe::App for PixelSorterApp {
             return;
         }
         
+        // Collect results of background work (sorting, capture, update check, USB)
+        self.poll_background_tasks(ctx);
+
         // Hide cursor in kiosk mode - force it every frame
         ctx.set_cursor_icon(egui::CursorIcon::None);
         ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::None);
@@ -208,15 +248,16 @@ impl eframe::App for PixelSorterApp {
                 }
             });
         
-        // Show splash screen for 2 seconds
+        // Show the splash animation for one wingbeat
         if self.show_splash {
             if let Some(start_time) = self.splash_start_time {
                 let elapsed = start_time.elapsed().as_secs_f32();
-                if elapsed > 2.0 {
+                if elapsed > Self::splash_duration() {
                     self.show_splash = false;
                 } else {
                     self.render_splash_screen(ctx, elapsed);
-                    ctx.request_repaint();
+                    // The animation only changes once per frame
+                    ctx.request_repaint_after(flight::FlightAnimation::frame_interval());
                     return;
                 }
             }
@@ -228,7 +269,7 @@ impl eframe::App for PixelSorterApp {
                 self.update_check_time = Some(Instant::now());
             } else if let Some(start_time) = self.update_check_time {
                 if start_time.elapsed().as_secs() >= 30 {
-                    let _ = self.update_manager.check_for_updates();
+                    self.start_update_check(ctx, false);
                     self.startup_check_done = true;
                 }
             }
@@ -297,15 +338,85 @@ impl eframe::App for PixelSorterApp {
         
         // Render overlays AFTER CentralPanel so they appear on top
         let full_rect = ctx.screen_rect();
-        self.render_battery_indicator(ctx, full_rect);
-        self.render_shutdown_button(ctx, full_rect);
         self.render_developer_menu(ctx, full_rect);
-        self.render_usb_export_dialog(ctx);
+        self.render_sheets(ctx);
         self.render_export_message(ctx, full_rect);
     }
 }
 
 impl PixelSorterApp {
+    fn poll_background_tasks(&mut self, ctx: &egui::Context) {
+        self.poll_sort_job(ctx);
+        self.poll_capture_task(ctx);
+        self.poll_update_check();
+        self.poll_usb_presence(ctx);
+        self.poll_usb_export();
+        self.poll_file_tasks(ctx);
+    }
+
+    /// Check git for updates in the background; `manual` shows the result as a toast
+    pub fn start_update_check(&mut self, ctx: &egui::Context, manual: bool) {
+        if self.update_check_task.is_some() {
+            return;
+        }
+        let project_path = self.update_manager.project_path().to_string();
+        self.update_check_manual = manual;
+        self.update_check_task = Some(BackgroundTask::spawn(ctx, "update-check", move || {
+            UpdateManager::check_for_updates(&project_path)
+        }));
+    }
+
+    fn poll_update_check(&mut self) {
+        let Some(outcome) = take_finished(&mut self.update_check_task) else {
+            return;
+        };
+        self.update_check_time = Some(Instant::now());
+        match outcome {
+            Some(Ok(update_found)) => {
+                self.update_manager.update_available = update_found;
+                if self.update_check_manual {
+                    if update_found {
+                        self.show_message("🆕 Update found! Restart to apply.");
+                    } else {
+                        self.show_message("✅ Already up to date");
+                    }
+                }
+            }
+            Some(Err(e)) => {
+                log::error!("Update check failed: {}", e);
+                if self.update_check_manual {
+                    self.show_message(format!("❌ Update check failed: {}", e));
+                }
+            }
+            None => log::error!("Update check thread ended without a result"),
+        }
+    }
+
+    /// Detect newly mounted USB drives (probed every 2 s on a background thread,
+    /// since the probe writes a test file to the drive)
+    fn poll_usb_presence(&mut self, ctx: &egui::Context) {
+        if let Some(outcome) = take_finished(&mut self.usb_check_task) {
+            let usb_now = outcome.unwrap_or(false);
+            if usb_now && !self.prev_usb_present && !self.show_usb_export_dialog {
+                log::info!("USB mounted - opening export dialog");
+                self.open_usb_export_dialog();
+            }
+            self.prev_usb_present = usb_now;
+        }
+
+        let now = Instant::now();
+        let should_check_usb = match self.last_usb_check {
+            None => true,
+            Some(last) => now.duration_since(last) >= std::time::Duration::from_secs(2),
+        };
+        if should_check_usb && self.usb_check_task.is_none() {
+            self.last_usb_check = Some(now);
+            self.usb_check_task = Some(BackgroundTask::spawn(ctx, "usb-check", || {
+                crate::system::usb::find_writable_usb_mount().is_some()
+            }));
+        }
+    }
+
     fn update_camera_preview(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
         let should_update = match self.last_camera_update {
@@ -330,23 +441,6 @@ impl PixelSorterApp {
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 let full_rect = ui.max_rect();
-
-                // Detect USB mount edge (throttled to once per 2 seconds to avoid overhead)
-                let now = Instant::now();
-                let should_check_usb = match self.last_usb_check {
-                    None => true,
-                    Some(last) => now.duration_since(last) >= std::time::Duration::from_secs(2),
-                };
-                
-                if should_check_usb {
-                    let usb_now = self.usb_present();
-                    if usb_now && !self.prev_usb_present && !self.show_usb_export_dialog {
-                        log::info!("USB mounted - opening export dialog");
-                        self.show_usb_export_dialog = true;
-                    }
-                    self.prev_usb_present = usb_now;
-                    self.last_usb_check = Some(now);
-                }
 
                 self.render_viewport(ui, full_rect, ctx);
                 self.render_button_overlay(ui, ctx, full_rect);

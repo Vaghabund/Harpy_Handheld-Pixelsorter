@@ -8,13 +8,11 @@ license = "MIT"
 [dependencies]
 # Image processing
 image = "0.24"
+rayon = "1.10"  # Parallel pixel sorting
 
 # GUI framework - egui for immediate mode GUI
 eframe = "0.24"
 egui = "0.24"
-
-# File dialogs and system integration
-rfd = "0.11"
 
 # Error handling
 anyhow = "1.0"

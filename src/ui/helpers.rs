@@ -32,3 +32,18 @@ pub fn load_logo_image() -> Option<image::RgbaImage> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// Message and button symbols must exist in egui's built-in fonts,
+    /// otherwise they render as empty boxes (e.g. ✓ and ✗ don't)
+    #[test]
+    fn ui_symbols_are_in_default_fonts() {
+        let ctx = eframe::egui::Context::default();
+        let _ = ctx.run(Default::default(), |_| {});
+        let font = eframe::egui::FontId::proportional(20.0);
+        for c in "✔❌⚠✅🆕⏳💾🗑📁📷🔄🔁🔌🛠🔋📍🔢⚡".chars() {
+            assert!(ctx.fonts(|f| f.has_glyph(&font, c)), "missing glyph {}", c);
+        }
+    }
+}
