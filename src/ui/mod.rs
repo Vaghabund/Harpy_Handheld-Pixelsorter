@@ -250,7 +250,8 @@ impl eframe::App for PixelSorterApp {
                     self.show_splash = false;
                 } else {
                     self.render_splash_screen(ctx, elapsed);
-                    ctx.request_repaint();
+                    // The animation only changes once per frame
+                    ctx.request_repaint_after(flight::FlightAnimation::frame_interval());
                     return;
                 }
             }

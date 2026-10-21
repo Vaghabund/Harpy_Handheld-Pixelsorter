@@ -20,9 +20,11 @@ impl PixelSorterApp {
     }
 
     pub fn render_splash_screen(&mut self, ctx: &egui::Context, elapsed: f32) {
-        // Fade in over the first 0.3s, out over the last 0.5s
+        // Fade in over the first 0.3s, out over the last 0.5s, stepping with
+        // the animation's 10 fps for a deliberately choppy, frame-by-frame look
         let total = Self::splash_duration();
-        let alpha = (elapsed / 0.3).min((total - elapsed) / 0.5).clamp(0.0, 1.0);
+        let t = FlightAnimation::snap(elapsed);
+        let alpha = ((t + 0.1) / 0.3).min((total - t) / 0.5).clamp(0.0, 1.0);
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none())

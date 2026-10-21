@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 const FLIGHT_PNG: &[u8] = include_bytes!("../../assets/harpy_flight.png");
 const COLS: usize = 120;
 const ROWS: usize = 67;
-const FPS: f32 = 24.0;
+const FPS: f32 = 10.0;
 
 pub struct FlightAnimation {
     frames: usize,
@@ -39,6 +39,17 @@ impl FlightAnimation {
             return None;
         }
         Some(FlightAnimation { frames: h as usize / ROWS, radii: strip.into_raw() })
+    }
+
+    /// Time between frames; the splash only repaints this often
+    pub fn frame_interval() -> std::time::Duration {
+        std::time::Duration::from_secs_f32(1.0 / FPS)
+    }
+
+    /// `elapsed` snapped back to the start of its frame, so everything
+    /// tied to the animation (like the fade) steps at the same rate
+    pub fn snap(elapsed: f32) -> f32 {
+        (elapsed * FPS).floor() / FPS
     }
 
     /// Length of one wingbeat loop in seconds
