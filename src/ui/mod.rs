@@ -350,7 +350,7 @@ impl PixelSorterApp {
         if should_update {
             if let Some(camera) = self.camera_controller.clone() {
                 if let Ok(mut camera_lock) = camera.try_write() {
-                    if let Ok(preview_image) = camera_lock.get_fast_preview_image() {
+                    if let Ok(Some(preview_image)) = camera_lock.get_fast_preview_image() {
                         self.update_camera_texture(ctx, &preview_image);
                         self.last_camera_update = Some(now);
                     }

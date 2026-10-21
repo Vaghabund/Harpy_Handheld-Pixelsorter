@@ -211,38 +211,32 @@ impl CameraController {
         log::info!("Camera streaming stopped");
     }
 
-    /// Get fast live preview image from streaming camera
-    pub fn get_fast_preview_image(&mut self) -> Result<RgbImage> {
+    /// Get the newest live preview frame from the streaming camera.
+    /// Returns `None` when no new frame has arrived since the last call, so the
+    /// caller keeps showing the previous frame instead of a placeholder.
+    pub fn get_fast_preview_image(&mut self) -> Result<Option<RgbImage>> {
         if !self.is_available {
-            return self.get_test_pattern();
+            return self.get_test_pattern().map(Some);
         }
 
         // Start streaming if not already active
         if !self.streaming_active {
             self.start_streaming()?;
-            // Give streaming a moment to start
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        // Try to get latest frame from stream
+        // Drain old frames, keep only the latest
+        let mut latest_frame = None;
         if let Some(receiver) = &self.frame_receiver {
-            // Drain old frames, keep only the latest
-            let mut latest_frame = None;
             while let Ok(frame) = receiver.try_recv() {
                 latest_frame = Some(frame);
             }
-
-            if let Some(frame) = latest_frame {
-                return Ok(frame);
-            }
         }
 
-        // Fallback to test pattern if no frames available
-        self.get_test_pattern()
+        Ok(latest_frame)
     }
 
     /// Get the latest preview image (now uses streaming)
-    pub fn get_preview_image(&mut self) -> Result<RgbImage> {
+    pub fn get_preview_image(&mut self) -> Result<Option<RgbImage>> {
         self.get_fast_preview_image()
     }
 
