@@ -26,6 +26,7 @@ impl PixelSorterApp {
         match take_finished(&mut self.capture_task) {
             Some(Some(Ok(frame))) => {
                 self.cancel_sort();
+                self.has_unsaved_changes = true;
                 self.original_image = Some(frame.clone());
                 self.processed_image = Some(frame.clone());
                 self.create_processed_texture(ctx, frame);

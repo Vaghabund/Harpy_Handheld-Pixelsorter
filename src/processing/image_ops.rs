@@ -17,6 +17,8 @@ pub enum SortTarget {
 /// A pixel sort running on a background thread
 pub struct SortJob {
     pub target: SortTarget,
+    /// The result counts as an unsaved edit (false for the automatic re-sort after Iterate)
+    pub marks_unsaved: bool,
     pub task: BackgroundTask<anyhow::Result<RgbImage>>,
 }
 
@@ -59,6 +61,7 @@ impl PixelSorterApp {
         self.is_processing = true;
         self.sort_job = Some(SortJob {
             target,
+            marks_unsaved: true,
             task: BackgroundTask::spawn(ctx, "pixel-sort", job),
         });
     }
@@ -79,26 +82,32 @@ impl PixelSorterApp {
             return;
         };
         let target = job.target;
+        let marks_unsaved = job.marks_unsaved;
         self.sort_job = None;
         self.is_processing = false;
 
         match outcome {
-            Some(Ok(sorted)) => match target {
-                SortTarget::Preview => {
-                    self.processed_image = Some(sorted.clone());
-                    self.create_processed_texture(ctx, sorted);
+            Some(Ok(sorted)) => {
+                if marks_unsaved {
+                    self.has_unsaved_changes = true;
                 }
-                SortTarget::Crop => {
-                    // Make the sorted cropped region the new full image
-                    self.original_image = Some(sorted.clone());
-                    self.processed_image = Some(sorted.clone());
-                    self.create_processed_texture(ctx, sorted);
+                match target {
+                    SortTarget::Preview => {
+                        self.processed_image = Some(sorted.clone());
+                        self.create_processed_texture(ctx, sorted);
+                    }
+                    SortTarget::Crop => {
+                        // Make the sorted cropped region the new full image
+                        self.original_image = Some(sorted.clone());
+                        self.processed_image = Some(sorted.clone());
+                        self.create_processed_texture(ctx, sorted);
 
-                    // Exit crop and return to Edit phase
-                    self.crop_rect = None;
-                    self.current_phase = crate::ui::Phase::Edit;
+                        // Exit crop and return to Edit phase
+                        self.crop_rect = None;
+                        self.current_phase = crate::ui::Phase::Edit;
+                    }
                 }
-            },
+            }
             Some(Err(e)) => {
                 log::error!("Pixel sort failed: {}", e);
                 self.show_message(format!("✗ Sort failed: {}", e));
@@ -121,6 +130,7 @@ impl PixelSorterApp {
                 Ok(img) => {
                     let rgb_image = img.to_rgb8();
                     self.cancel_sort();
+                    self.has_unsaved_changes = true;
                     self.original_image = Some(rgb_image.clone());
                     self.processed_image = Some(rgb_image.clone());
                     self.create_processed_texture(ctx, rgb_image);

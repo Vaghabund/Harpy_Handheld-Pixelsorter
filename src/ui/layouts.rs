@@ -166,7 +166,7 @@ impl PixelSorterApp {
             .order(egui::Order::Background)
             .show(ctx, |ui| {
                 if circular_button(ui, btn_sizes.normal_radius, "New", button_dark()) {
-                    self.start_new_photo_session();
+                    self.request_new_photo_session();
                 }
             });
 

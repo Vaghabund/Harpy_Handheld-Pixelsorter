@@ -61,6 +61,9 @@ pub struct PixelSorterApp {
     // Session management
     pub iteration_counter: u32,
     pub current_session_folder: Option<String>,
+    /// The current image has edits that haven't been saved (Iterate) yet
+    pub has_unsaved_changes: bool,
+    pub show_new_session_dialog: bool,
     
     // Export status
     pub export_message: Option<String>,
@@ -145,6 +148,8 @@ impl PixelSorterApp {
             drag_state: DragState::None,
             iteration_counter: 0,
             current_session_folder: None,
+            has_unsaved_changes: false,
+            show_new_session_dialog: false,
             export_message: None,
             export_message_time: None,
             logo: None,
@@ -320,6 +325,7 @@ impl eframe::App for PixelSorterApp {
         self.render_shutdown_button(ctx, full_rect);
         self.render_developer_menu(ctx, full_rect);
         self.render_usb_export_dialog(ctx);
+        self.render_new_session_dialog(ctx);
         self.render_export_message(ctx, full_rect);
     }
 }

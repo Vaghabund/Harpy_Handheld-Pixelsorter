@@ -335,4 +335,54 @@ impl PixelSorterApp {
             ctx.move_to_top(response.response.layer_id);
         }
     }
+
+    /// Confirmation shown by "New" when the current image has unsaved edits
+    pub fn render_new_session_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_new_session_dialog {
+            return;
+        }
+
+        let style = MenuStyle::usb_export();
+
+        let response = egui::Window::new("📷 New Photo")
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.set_min_width(style.width);
+
+                ui.vertical_centered(|ui| {
+                    ui.add_space(style.spacing * 0.67);
+                    ui.label(button_text("Save before starting a new photo?", style.heading_size));
+                    ui.add_space(style.spacing * 1.33);
+
+                    if ui.add_sized(
+                        [style.button_width, style.button_height],
+                        egui::Button::new(button_text("💾 Save", style.label_size))
+                            .fill(egui::Color32::from_rgb(40, 120, 40)))
+                        .clicked()
+                    {
+                        self.save_and_start_new_photo_session();
+                    }
+
+                    ui.add_space(style.spacing * 0.67);
+
+                    if menu_button(ui, [style.button_width, style.button_height], "🗑 Discard", style.label_size) {
+                        log::info!("Discarding unsaved image for new photo");
+                        self.start_new_photo_session();
+                    }
+
+                    ui.add_space(style.spacing * 0.67);
+
+                    if menu_button(ui, [style.button_width, style.cancel_button_height], "Cancel", style.label_size) {
+                        self.show_new_session_dialog = false;
+                    }
+                });
+            });
+
+        // Force window to top layer
+        if let Some(response) = response {
+            ctx.move_to_top(response.response.layer_id);
+        }
+    }
 }

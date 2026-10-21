@@ -37,6 +37,7 @@ impl PixelSorterApp {
         
         let save_path = session_dir.join(filename);
         image.save(&save_path)?;
+        self.has_unsaved_changes = false;
         
         // Return the path for potential loading in next iteration
         Ok(save_path)
@@ -130,9 +131,42 @@ impl PixelSorterApp {
         Ok(())
     }
 
+    /// "New" button: start over, asking first if the current image has unsaved edits
+    pub fn request_new_photo_session(&mut self) {
+        if self.has_unsaved_changes && self.processed_image.is_some() {
+            self.show_new_session_dialog = true;
+        } else {
+            self.start_new_photo_session();
+        }
+    }
+
+    /// Save the current result (as an iteration of this session), then start over
+    pub fn save_and_start_new_photo_session(&mut self) {
+        let Some(processed) = self.processed_image.clone() else {
+            self.start_new_photo_session();
+            return;
+        };
+        let algorithm = self.current_algorithm;
+        match self.auto_save_image(&processed, &algorithm) {
+            Ok(path) => {
+                log::info!("Saved {} before starting new photo", path.display());
+                self.show_message("✓ Saved");
+                self.start_new_photo_session();
+            }
+            Err(e) => {
+                // Stay on the image so nothing is lost
+                log::error!("Failed to save before new photo: {}", e);
+                self.show_message(format!("✗ Save failed: {}", e));
+                self.show_new_session_dialog = false;
+            }
+        }
+    }
+
     pub fn start_new_photo_session(&mut self) {
         // Reset session state
         self.cancel_sort();
+        self.has_unsaved_changes = false;
+        self.show_new_session_dialog = false;
         self.iteration_counter = 0;
         self.current_session_folder = None;
         self.original_image = None;
@@ -169,8 +203,11 @@ impl PixelSorterApp {
         self.tint_enabled = false;
 
         // Re-sort the new source for preview; a sort of the previous source
-        // still in flight is obsolete
+        // still in flight is obsolete. This automatic re-sort isn't a new edit.
         self.cancel_sort();
         self.apply_pixel_sort(ctx);
+        if let Some(job) = &mut self.sort_job {
+            job.marks_unsaved = false;
+        }
     }
 }
