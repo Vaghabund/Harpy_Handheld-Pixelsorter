@@ -45,9 +45,9 @@ impl PixelSorterApp {
 
                 // Draw logo
                 if let Some(logo_texture) = &self.logo {
-                    let logo_size = 256.0; // Size of the logo
+                    let logo_size = 400.0; // Large enough that the halftone dots stay crisp
                     let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
+                        egui::pos2(center.x, center.y - 70.0),
                         egui::vec2(logo_size, logo_size),
                     );
 
@@ -68,7 +68,7 @@ impl PixelSorterApp {
 
                 let text_pos = egui::pos2(
                     center.x - galley.size().x / 2.0,
-                    center.y + 120.0,
+                    center.y + 150.0,
                 );
                 ui.painter().galley(text_pos, galley);
             });
@@ -97,9 +97,9 @@ impl PixelSorterApp {
 
                 // Draw logo (dim for sleep mode)
                 if let Some(logo_texture) = &self.logo {
-                    let logo_size = 200.0; // Slightly smaller than splash
+                    let logo_size = 320.0; // Slightly smaller than splash
                     let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
+                        egui::pos2(center.x, center.y - 70.0),
                         egui::vec2(logo_size, logo_size),
                     );
 
@@ -121,7 +121,7 @@ impl PixelSorterApp {
 
                 let text_pos = egui::pos2(
                     center.x - galley.size().x / 2.0,
-                    center.y + 100.0,
+                    center.y + 110.0,
                 );
                 ui.painter().galley(text_pos, galley);
 
@@ -133,7 +133,7 @@ impl PixelSorterApp {
 
                 let hint_pos = egui::pos2(
                     center.x - hint_galley.size().x / 2.0,
-                    center.y + 160.0,
+                    center.y + 170.0,
                 );
                 ui.painter().galley(hint_pos, hint_galley);
             });
@@ -156,9 +156,9 @@ impl PixelSorterApp {
 
                 // Draw logo (full brightness for waking)
                 if let Some(logo_texture) = &self.logo {
-                    let logo_size = 200.0;
+                    let logo_size = 320.0;
                     let logo_rect = egui::Rect::from_center_size(
-                        egui::pos2(center.x, center.y - 40.0),
+                        egui::pos2(center.x, center.y - 70.0),
                         egui::vec2(logo_size, logo_size),
                     );
 
@@ -180,7 +180,7 @@ impl PixelSorterApp {
 
                 let text_pos = egui::pos2(
                     center.x - galley.size().x / 2.0,
-                    center.y + 100.0,
+                    center.y + 110.0,
                 );
                 ui.painter().galley(text_pos, galley);
             });
