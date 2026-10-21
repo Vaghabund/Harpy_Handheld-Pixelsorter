@@ -1,45 +1,115 @@
 use crate::PixelSorterApp;
+use crate::ui::background::BackgroundTask;
 use eframe::egui;
+use image::RgbImage;
 use rayon::prelude::*;
 use std::sync::Arc;
 
+/// What the result of a running sort job is used for
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SortTarget {
+    /// Re-sort of the current image with new settings (Edit phase)
+    Preview,
+    /// Sorted crop that becomes the new source image
+    Crop,
+}
+
+/// A pixel sort running on a background thread
+pub struct SortJob {
+    pub target: SortTarget,
+    pub task: BackgroundTask<anyhow::Result<RgbImage>>,
+}
+
 impl PixelSorterApp {
+    /// Re-sort the current image with the current settings in the background.
+    /// If a sort is already running, one more sort with the latest settings
+    /// runs as soon as it finishes (intermediate slider positions are skipped).
     pub fn apply_pixel_sort(&mut self, ctx: &egui::Context) {
-        if let Some(ref original) = self.original_image.clone() {
-            self.is_processing = true;
-
-            let algorithm = self.current_algorithm;
-            let params = self.sorting_params.clone();
-            let pixel_sorter = Arc::clone(&self.pixel_sorter);
-
-            match pixel_sorter.sort_pixels(original, algorithm, &params) {
-                Ok(mut sorted) => {
-                    // Apply tint AFTER pixel sorting (as a visual effect only)
-                    if self.tint_enabled && self.sorting_params.color_tint > 0.0 {
-                        self.apply_tint_to_image(&mut sorted, self.sorting_params.color_tint);
-                    }
-                    
-                    self.processed_image = Some(sorted.clone());
-                    self.create_processed_texture(ctx, sorted);
-                    self.is_processing = false;
-                }
-                Err(e) => {
-                    log::error!("Pixel sort failed: {}", e);
-                    self.is_processing = false;
-                }
+        if let Some(job) = &self.sort_job {
+            if job.target == SortTarget::Preview {
+                self.sort_pending = true;
             }
+            return;
         }
+
+        let Some(original) = self.original_image.clone() else {
+            return;
+        };
+        let algorithm = self.current_algorithm;
+        let params = self.sorting_params.clone();
+        let pixel_sorter = Arc::clone(&self.pixel_sorter);
+        // Tint is applied AFTER pixel sorting (as a visual effect only)
+        let tint_hue = (self.tint_enabled && params.color_tint > 0.0).then_some(params.color_tint);
+
+        self.start_sort_job(ctx, SortTarget::Preview, move || {
+            let mut sorted = pixel_sorter.sort_pixels(&original, algorithm, &params)?;
+            if let Some(hue) = tint_hue {
+                apply_tint_to_image(&mut sorted, hue);
+            }
+            Ok(sorted)
+        });
     }
 
-    fn apply_tint_to_image(&self, image: &mut image::RgbImage, tint_hue: f32) {
-        let tint_color = crate::processing::pixel_sorter::hue_to_rgb_pixel(tint_hue);
-        let strength = 0.2; // Strength for tinting
-
-        let pixels: &mut [u8] = image;
-        pixels.par_chunks_exact_mut(3).for_each(|px| {
-            let tinted = blend_tint_preserve_luminance(&image::Rgb([px[0], px[1], px[2]]), &tint_color, strength);
-            px.copy_from_slice(&tinted.0);
+    pub fn start_sort_job(
+        &mut self,
+        ctx: &egui::Context,
+        target: SortTarget,
+        job: impl FnOnce() -> anyhow::Result<RgbImage> + Send + 'static,
+    ) {
+        self.is_processing = true;
+        self.sort_job = Some(SortJob {
+            target,
+            task: BackgroundTask::spawn(ctx, "pixel-sort", job),
         });
+    }
+
+    /// Discard any running or queued sort (e.g. when the source image is replaced)
+    pub fn cancel_sort(&mut self) {
+        self.sort_job = None;
+        self.sort_pending = false;
+        self.is_processing = false;
+    }
+
+    /// Apply the result of a finished sort job, if any
+    pub fn poll_sort_job(&mut self, ctx: &egui::Context) {
+        let Some(job) = &self.sort_job else {
+            return;
+        };
+        let Some(outcome) = job.task.poll() else {
+            return;
+        };
+        let target = job.target;
+        self.sort_job = None;
+        self.is_processing = false;
+
+        match outcome {
+            Some(Ok(sorted)) => match target {
+                SortTarget::Preview => {
+                    self.processed_image = Some(sorted.clone());
+                    self.create_processed_texture(ctx, sorted);
+                }
+                SortTarget::Crop => {
+                    // Make the sorted cropped region the new full image
+                    self.original_image = Some(sorted.clone());
+                    self.processed_image = Some(sorted.clone());
+                    self.create_processed_texture(ctx, sorted);
+
+                    // Exit crop and return to Edit phase
+                    self.crop_rect = None;
+                    self.current_phase = crate::ui::Phase::Edit;
+                }
+            },
+            Some(Err(e)) => {
+                log::error!("Pixel sort failed: {}", e);
+                self.show_message(format!("✗ Sort failed: {}", e));
+            }
+            None => log::error!("Pixel sort thread ended without a result"),
+        }
+
+        if self.sort_pending {
+            self.sort_pending = false;
+            self.apply_pixel_sort(ctx);
+        }
     }
 
     pub fn load_image(&mut self, ctx: &egui::Context) {
@@ -50,6 +120,7 @@ impl PixelSorterApp {
             match image::open(&path) {
                 Ok(img) => {
                     let rgb_image = img.to_rgb8();
+                    self.cancel_sort();
                     self.original_image = Some(rgb_image.clone());
                     self.processed_image = Some(rgb_image.clone());
                     self.create_processed_texture(ctx, rgb_image);
@@ -95,4 +166,15 @@ fn blend_tint_preserve_luminance(original: &image::Rgb<u8>, tint: &image::Rgb<u8
         (final_g * 255.0).round() as u8,
         (final_b * 255.0).round() as u8,
     ])
+}
+
+fn apply_tint_to_image(image: &mut RgbImage, tint_hue: f32) {
+    let tint_color = crate::processing::pixel_sorter::hue_to_rgb_pixel(tint_hue);
+    let strength = 0.2; // Strength for tinting
+
+    let pixels: &mut [u8] = image;
+    pixels.par_chunks_exact_mut(3).for_each(|px| {
+        let tinted = blend_tint_preserve_luminance(&image::Rgb([px[0], px[1], px[2]]), &tint_color, strength);
+        px.copy_from_slice(&tinted.0);
+    });
 }

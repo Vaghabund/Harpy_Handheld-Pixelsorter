@@ -1,8 +1,16 @@
 use crate::PixelSorterApp;
+use crate::ui::background::{take_finished, BackgroundTask};
 use eframe::egui;
 use std::path::PathBuf;
 use chrono::{DateTime, Local};
 use crate::processing::SortingAlgorithm;
+
+/// Outcome of a USB export, shown to the user as a toast
+pub struct UsbExportResult {
+    message: String,
+    /// Local images were deleted, so the session must be reset
+    deleted_local: bool,
+}
 
 impl PixelSorterApp {
     fn auto_save_image(&mut self, image: &image::RgbImage, algorithm: &SortingAlgorithm) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -34,7 +42,56 @@ impl PixelSorterApp {
         Ok(save_path)
     }
 
-    pub fn copy_to_usb(&self) -> Result<(), Box<dyn std::error::Error>> {
+    /// Copy all sorted images to the USB drive in the background
+    pub fn start_usb_export(&mut self, ctx: &egui::Context, delete_after: bool) {
+        if self.usb_export_task.is_some() {
+            return; // Export already running
+        }
+        log::info!("USB export started (delete_after: {})", delete_after);
+        self.show_message("⏳ Copying to USB...");
+        self.usb_export_task = Some(BackgroundTask::spawn(ctx, "usb-export", move || {
+            Self::export_to_usb(delete_after)
+        }));
+    }
+
+    /// Show the outcome of a finished USB export
+    pub fn poll_usb_export(&mut self) {
+        match take_finished(&mut self.usb_export_task) {
+            Some(Some(result)) => {
+                if result.deleted_local {
+                    // Reset session since we deleted everything
+                    self.current_session_folder = None;
+                    self.iteration_counter = 0;
+                }
+                self.show_message(result.message);
+            }
+            Some(None) => self.show_message("✗ Export failed unexpectedly"),
+            None => {}
+        }
+    }
+
+    /// Copy sorted images to USB and optionally delete the local copies.
+    /// Runs on a background thread.
+    fn export_to_usb(delete_after: bool) -> UsbExportResult {
+        if let Err(e) = Self::copy_to_usb() {
+            return UsbExportResult { message: format!("✗ Export failed: {}", e), deleted_local: false };
+        }
+        if !delete_after {
+            return UsbExportResult { message: "✓ Exported to USB!".to_string(), deleted_local: false };
+        }
+        match std::fs::remove_dir_all(crate::system::paths::sorted_images_dir()) {
+            Ok(()) => {
+                log::info!("Deleted local sorted_images folder after export");
+                UsbExportResult { message: "✓ Exported and deleted local copies!".to_string(), deleted_local: true }
+            }
+            Err(e) => {
+                log::error!("Failed to delete images: {}", e);
+                UsbExportResult { message: format!("⚠ Exported but deletion failed: {}", e), deleted_local: false }
+            }
+        }
+    }
+
+    fn copy_to_usb() -> Result<(), String> {
         let usb_path = crate::system::usb::find_writable_usb_mount()
             .ok_or("No writable USB drive found")?;
 
@@ -75,6 +132,7 @@ impl PixelSorterApp {
 
     pub fn start_new_photo_session(&mut self) {
         // Reset session state
+        self.cancel_sort();
         self.iteration_counter = 0;
         self.current_session_folder = None;
         self.original_image = None;
@@ -127,7 +185,9 @@ impl PixelSorterApp {
             if let Ok(_saved_path) = self.auto_save_image(processed, &algorithm) {
                 // Load the saved image as the new source for next iteration
                 if let Ok(()) = self.load_last_iteration_as_source() {
-                    // Process the loaded image immediately for preview
+                    // Process the loaded image immediately for preview; a sort of the
+                    // previous source still in flight is obsolete
+                    self.cancel_sort();
                     self.apply_pixel_sort(ctx);
                 }
             }

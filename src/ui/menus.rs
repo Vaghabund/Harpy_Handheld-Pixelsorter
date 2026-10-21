@@ -1,7 +1,6 @@
 use crate::PixelSorterApp;
 use crate::system::SystemControl;
 use eframe::egui;
-use std::time::Instant;
 use super::styles::{MenuStyle, button_text, menu_button};
 
 const UI_PADDING: f32 = 20.0;
@@ -212,25 +211,14 @@ impl PixelSorterApp {
                             ui.label(egui::RichText::new("✅ App is up to date").color(egui::Color32::GRAY).size(style.label_size));
                             ui.add_space(5.0);
 
-                            // Manual check button
-                            if menu_button(ui, [style.button_width, style.button_height], "🔄 Check Now", style.label_size) {
+                            // Manual check button (result is shown as a toast when the check finishes)
+                            if self.update_check_task.is_some() {
+                                ui.add_enabled_ui(false, |ui| {
+                                    menu_button(ui, [style.button_width, style.button_height], "⏳ Checking...", style.label_size);
+                                });
+                            } else if menu_button(ui, [style.button_width, style.button_height], "🔄 Check Now", style.label_size) {
                                 log::info!("Manual update check requested");
-                                match self.update_manager.check_for_updates() {
-                                    Ok(update_found) => {
-                                        if update_found {
-                                            self.show_message("🆕 Update found! Restart to apply.");
-                                            log::info!("Update available!");
-                                        } else {
-                                            self.show_message("✅ Already up to date");
-                                            log::info!("No updates available");
-                                        }
-                                        self.update_check_time = Some(Instant::now());
-                                    }
-                                    Err(e) => {
-                                        self.show_message(format!("❌ Update check failed: {}", e));
-                                        log::error!("Update check failed: {}", e);
-                                    }
-                                }
+                                self.start_update_check(ctx, true);
                                 // Don't close menu - let user see the result
                             }
                         }
@@ -326,30 +314,7 @@ impl PixelSorterApp {
                             .fill(egui::Color32::from_rgb(40, 120, 40)))
                         .clicked() 
                     {
-                        log::info!("USB export started (delete_after: {})", self.usb_export_delete_after);
-                        
-                        match self.copy_to_usb() {
-                            Ok(()) => {
-                                self.show_message("✓ Exported to USB!");
-                                
-                                // Delete files if checkbox was checked
-                                if self.usb_export_delete_after {
-                                    if let Err(e) = std::fs::remove_dir_all(crate::system::paths::sorted_images_dir()) {
-                                        log::error!("Failed to delete images: {}", e);
-                                        self.show_message(format!("⚠ Exported but deletion failed: {}", e));
-                                    } else {
-                                        log::info!("Deleted local sorted_images folder after export");
-                                        self.show_message("✓ Exported and deleted local copies!");
-                                        // Reset session since we deleted everything
-                                        self.current_session_folder = None;
-                                        self.iteration_counter = 0;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                self.show_message(format!("✗ Export failed: {}", e));
-                            }
-                        }
+                        self.start_usb_export(ctx, self.usb_export_delete_after);
                         
                         self.show_usb_export_dialog = false;
                         self.usb_export_delete_after = false; // Reset for next time

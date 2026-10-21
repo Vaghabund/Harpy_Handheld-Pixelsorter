@@ -20,7 +20,8 @@ impl PixelSorterApp {
         }
 
         if let Some(ref message) = self.export_message {
-            let is_success = message.starts_with('✓');
+            // Errors and warnings are red, everything else (✓, progress, info) green
+            let is_success = !message.starts_with(['✗', '⚠', '❌']);
 
             egui::Area::new("export_message")
                 .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, UI_PADDING * 3.0))

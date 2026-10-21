@@ -205,6 +205,10 @@ impl PixelSorterApp {
             .order(egui::Order::Background)
             .show(ctx, |ui| {
                 if circular_button(ui, sizes.normal_radius, "Cancel", button_red()) {
+                    // Discard a crop that is still being applied
+                    if matches!(&self.sort_job, Some(job) if job.target == crate::processing::image_ops::SortTarget::Crop) {
+                        self.cancel_sort();
+                    }
                     self.current_phase = Phase::Edit;
                     self.crop_rect = None;
                 }
