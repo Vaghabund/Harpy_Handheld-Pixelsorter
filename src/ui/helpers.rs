@@ -18,15 +18,16 @@ pub fn center_rect_in_rect(content_size: egui::Vec2, container: egui::Rect) -> e
     egui::Rect::from_min_size(container.min + offset, content_size)
 }
 
-/// Path of the Harpy logo, used for the window icon and splash/sleep screens
-pub const LOGO_PATH: &str = "assets/Harpy_ICON.png";
+/// Harpy logo, embedded so the window icon and splash/sleep screens never
+/// depend on the working directory
+const LOGO_PNG: &[u8] = include_bytes!("../../assets/Harpy_ICON.png");
 
-/// Load the Harpy logo as RGBA, or None if the file is missing/unreadable
+/// Decode the embedded Harpy logo as RGBA
 pub fn load_logo_image() -> Option<image::RgbaImage> {
-    match image::open(LOGO_PATH) {
+    match image::load_from_memory(LOGO_PNG) {
         Ok(img) => Some(img.to_rgba8()),
         Err(e) => {
-            log::warn!("Could not load logo from {}: {}", LOGO_PATH, e);
+            log::warn!("Could not decode embedded logo: {}", e);
             None
         }
     }

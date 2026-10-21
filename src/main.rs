@@ -153,10 +153,10 @@ fn load_icon() -> egui::IconData {
 fn load_ups_config() -> UpsConfig {
     use std::fs;
     
-    let config_path = "ups_config.toml";
+    let config_path = crate::system::paths::ups_config_path();
     
     // Try to load from file
-    if let Ok(contents) = fs::read_to_string(config_path) {
+    if let Ok(contents) = fs::read_to_string(&config_path) {
         // Simple TOML parsing for our needs
         let mut config = UpsConfig::default();
         
@@ -188,10 +188,10 @@ fn load_ups_config() -> UpsConfig {
             }
         }
         
-        info!("UPS configuration loaded from {}", config_path);
+        info!("UPS configuration loaded from {}", config_path.display());
         config
     } else {
-        info!("No UPS config found at {}, using defaults (disabled)", config_path);
+        info!("No UPS config found at {}, using defaults (disabled)", config_path.display());
         UpsConfig::default()
     }
 }

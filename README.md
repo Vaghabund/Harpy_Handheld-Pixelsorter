@@ -102,6 +102,8 @@ Harpy runs on Windows, macOS, and Linux for development. The camera is replaced 
 cargo run
 ```
 
+Saved images (`sorted_images/`) and `ups_config.toml` live in the project checkout, which the app finds from its executable path (`<checkout>/target/<profile>/pixelsort-pi`), so it works from any working directory. Set `HARPY_APP_DIR` to use a different folder.
+
 **Cross-compile for Pi from your dev machine:**
 ```bash
 cargo install cross
