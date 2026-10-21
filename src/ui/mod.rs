@@ -172,7 +172,7 @@ impl PixelSorterApp {
                         if let Some(on_idx) = line.find(" on ") {
                             if let Some(type_idx) = line.find(" type ") {
                                 let mount_point = &line[on_idx + 4..type_idx];
-                                log::info!("Found USB drive at: {}", mount_point);
+                                log::debug!("Found USB drive at: {}", mount_point);
                                 
                                 // Test if we can write to it
                                 let test_path = std::path::PathBuf::from(mount_point)
