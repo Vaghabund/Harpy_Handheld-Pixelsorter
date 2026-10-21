@@ -60,7 +60,7 @@ impl Default for UpsConfig {
             enabled: false,  // Disabled by default, enable in config
             i2c_bus: 1,      // Usually /dev/i2c-1 on Pi
             i2c_address: 0x36, // Common address for fuel gauge ICs
-            voltage_threshold: 3.2, // 3.2V per cell (for 2S = 6.4V total)
+            voltage_threshold: 6.4, // Pack voltage: 2S Li-ion at 3.2V per cell
             check_interval_secs: 5,
         }
     }
@@ -119,12 +119,24 @@ pub fn start_monitoring(config: UpsConfig) -> Arc<AtomicBool> {
                         log::warn!("LOW BATTERY WARNING: {:.2}V (threshold: {:.2}V)", 
                                   voltage, config.voltage_threshold);
                         
-                        // Give user 30 seconds warning
+                        // Give user 30 seconds warning, re-checking so plugging in
+                        // a charger (or a transient voltage dip) cancels the shutdown
+                        let mut cancelled = false;
                         for i in (1..=6).rev() {
                             log::warn!("Shutting down in {} seconds...", i * 5);
                             sleep(Duration::from_secs(5)).await;
+                            if let Ok((voltage, is_charging)) = check_battery_voltage(&config) {
+                                if is_charging || voltage >= config.voltage_threshold {
+                                    cancelled = true;
+                                    break;
+                                }
+                            }
                         }
-                        
+                        if cancelled {
+                            log::info!("Battery recovered or charger connected - shutdown cancelled");
+                            continue;
+                        }
+
                         log::error!("Battery critical! Initiating safe shutdown...");
                         SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
                         flag_clone.store(true, Ordering::Relaxed);
@@ -177,7 +189,8 @@ fn check_battery_voltage(config: &UpsConfig) -> Result<(f32, bool), String> {
         if let Ok(mut file) = File::open(path) {
             let mut contents = String::new();
             if file.read_to_string(&mut contents).is_ok() {
-                is_charging = contents.trim().to_lowercase().contains("charging");
+                // Exact match: "Discharging" contains "charging" as a substring
+                is_charging = contents.trim().eq_ignore_ascii_case("charging");
                 break;
             }
         }

@@ -203,14 +203,12 @@ impl PixelSorterApp {
 
         if crop_response.dragged() && self.drag_state == DragState::MovingCrop {
             let delta = crop_response.drag_delta() / scale;
-            if let Some(mut rect) = self.crop_rect {
-                rect = rect.translate(delta);
-                // Clamp to image bounds
-                rect.min.x = rect.min.x.max(0.0);
-                rect.min.y = rect.min.y.max(0.0);
-                rect.max.x = rect.max.x.min(image_size.x);
-                rect.max.y = rect.max.y.min(image_size.y);
-                self.crop_rect = Some(rect);
+            if let Some(rect) = self.crop_rect {
+                // Clamp the movement (not the corners) so the box stops at the
+                // image edge instead of shrinking
+                let dx = delta.x.max(-rect.min.x).min(image_size.x - rect.max.x);
+                let dy = delta.y.max(-rect.min.y).min(image_size.y - rect.max.y);
+                self.crop_rect = Some(rect.translate(egui::vec2(dx, dy)));
             }
         }
 

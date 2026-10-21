@@ -172,7 +172,7 @@ impl PixelSorterApp {
                         if let Some(on_idx) = line.find(" on ") {
                             if let Some(type_idx) = line.find(" type ") {
                                 let mount_point = &line[on_idx + 4..type_idx];
-                                log::info!("Found USB drive at: {}", mount_point);
+                                log::debug!("Found USB drive at: {}", mount_point);
                                 
                                 // Test if we can write to it
                                 let test_path = std::path::PathBuf::from(mount_point)
@@ -350,7 +350,7 @@ impl PixelSorterApp {
         if should_update {
             if let Some(camera) = self.camera_controller.clone() {
                 if let Ok(mut camera_lock) = camera.try_write() {
-                    if let Ok(preview_image) = camera_lock.get_fast_preview_image() {
+                    if let Ok(Some(preview_image)) = camera_lock.get_fast_preview_image() {
                         self.update_camera_texture(ctx, &preview_image);
                         self.last_camera_update = Some(now);
                     }

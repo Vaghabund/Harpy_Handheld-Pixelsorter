@@ -220,7 +220,12 @@ impl PixelSorterApp {
                                 self.show_developer_menu = false;
 
                                 // Pull updates and restart service using update_manager
-                                let _ = self.update_manager.pull_and_restart_service("pixelsort-kiosk");
+                                // (only returns if the update could not be started)
+                                if let Err(e) = self.update_manager.pull_and_restart_service("pixelsort-kiosk") {
+                                    log::error!("Failed to start update: {}", e);
+                                    self.export_message = Some(format!("✗ Update failed: {}", e));
+                                    self.export_message_time = Some(Instant::now());
+                                }
                             }
                         } else {
                             ui.label(egui::RichText::new("✅ App is up to date").color(egui::Color32::GRAY).size(style.label_size));
@@ -276,8 +281,12 @@ impl PixelSorterApp {
                             log::info!("App restart requested");
                             self.export_message = Some("🔁 Restarting...".to_string());
                             self.export_message_time = Some(Instant::now());
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                            // Note: systemd will auto-restart if configured with Restart=on-failure
+                            // A clean exit doesn't trigger Restart=on-failure, so ask systemd
+                            // to restart the service; fall back to closing if not under systemd
+                            if let Err(e) = SystemControl::restart_service("pixelsort-kiosk") {
+                                log::warn!("Service restart failed ({}), closing app instead", e);
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
 
                         ui.add_space(style.spacing * 0.5);

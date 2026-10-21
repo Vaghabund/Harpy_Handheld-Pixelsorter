@@ -171,8 +171,9 @@ impl PixelSorterApp {
                 }
             });
 
-        // Optional: USB export button if USB present
-        if self.usb_present() {
+        // Optional: USB export button if USB present (uses the throttled check
+        // from render_ui; probing here would spawn `mount` and write to the stick every frame)
+        if self.prev_usb_present {
             let export_y = screen_rect.max.y - btn_sizes.normal_radius - btn_sizes.spacing / USB_BUTTON_Y_OFFSET_DIVISOR;
             egui::Area::new("export_btn")
                 .fixed_pos(egui::pos2(btn_sizes.spacing, export_y))

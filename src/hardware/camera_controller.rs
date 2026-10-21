@@ -3,9 +3,12 @@ use anyhow::{anyhow, Result};
 use image::{RgbImage, ImageBuffer};
 use std::path::Path;
 use std::io::Read;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::process::Command;
+
+/// Max decoded frames buffered between the stream thread and the UI
+const FRAME_QUEUE_CAPACITY: usize = 2;
 
 /// Camera controller for Raspberry Pi Camera v1.5 using libcamera
 /// Uses streaming approach for live preview + on-demand still capture
@@ -27,7 +30,7 @@ pub struct CameraController {
     /// Channel for receiving frames from streaming thread
     frame_receiver: Option<Receiver<RgbImage>>,
     /// Channel for sending frames to main thread
-    frame_sender: Option<Sender<RgbImage>>,
+    frame_sender: Option<SyncSender<RgbImage>>,
     /// Streaming thread handle
     stream_thread: Option<thread::JoinHandle<()>>,
     /// Whether streaming is active
@@ -111,8 +114,9 @@ impl CameraController {
             return Ok(());
         }
 
-        // Create channel for frame communication
-        let (sender, receiver) = mpsc::channel();
+        // Bounded channel: if the UI isn't consuming frames (splash, sleep, other
+        // phases) new frames are dropped instead of piling up in memory
+        let (sender, receiver) = mpsc::sync_channel(FRAME_QUEUE_CAPACITY);
         self.frame_sender = Some(sender);
         self.frame_receiver = Some(receiver);
 
@@ -157,8 +161,10 @@ impl CameraController {
                                     // Decode JPEG frame
                                     if let Ok(img) = image::load_from_memory_with_format(jpeg_data, image::ImageFormat::Jpeg) {
                                         let rgb_img = img.to_rgb8();
-                                        // Send frame to main thread (non-blocking)
-                                        let _ = frame_sender.send(rgb_img);
+                                        // Send frame to main thread (non-blocking, drop if queue is full)
+                                        if let Err(TrySendError::Disconnected(_)) = frame_sender.try_send(rgb_img) {
+                                            return;
+                                        }
                                     }
 
                                     // Remove processed data
@@ -205,38 +211,32 @@ impl CameraController {
         log::info!("Camera streaming stopped");
     }
 
-    /// Get fast live preview image from streaming camera
-    pub fn get_fast_preview_image(&mut self) -> Result<RgbImage> {
+    /// Get the newest live preview frame from the streaming camera.
+    /// Returns `None` when no new frame has arrived since the last call, so the
+    /// caller keeps showing the previous frame instead of a placeholder.
+    pub fn get_fast_preview_image(&mut self) -> Result<Option<RgbImage>> {
         if !self.is_available {
-            return self.get_test_pattern();
+            return self.get_test_pattern().map(Some);
         }
 
         // Start streaming if not already active
         if !self.streaming_active {
             self.start_streaming()?;
-            // Give streaming a moment to start
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        // Try to get latest frame from stream
+        // Drain old frames, keep only the latest
+        let mut latest_frame = None;
         if let Some(receiver) = &self.frame_receiver {
-            // Drain old frames, keep only the latest
-            let mut latest_frame = None;
             while let Ok(frame) = receiver.try_recv() {
                 latest_frame = Some(frame);
             }
-
-            if let Some(frame) = latest_frame {
-                return Ok(frame);
-            }
         }
 
-        // Fallback to test pattern if no frames available
-        self.get_test_pattern()
+        Ok(latest_frame)
     }
 
     /// Get the latest preview image (now uses streaming)
-    pub fn get_preview_image(&mut self) -> Result<RgbImage> {
+    pub fn get_preview_image(&mut self) -> Result<Option<RgbImage>> {
         self.get_fast_preview_image()
     }
 
