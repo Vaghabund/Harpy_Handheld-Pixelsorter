@@ -281,8 +281,12 @@ impl PixelSorterApp {
                             log::info!("App restart requested");
                             self.export_message = Some("🔁 Restarting...".to_string());
                             self.export_message_time = Some(Instant::now());
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                            // Note: systemd will auto-restart if configured with Restart=on-failure
+                            // A clean exit doesn't trigger Restart=on-failure, so ask systemd
+                            // to restart the service; fall back to closing if not under systemd
+                            if let Err(e) = SystemControl::restart_service("pixelsort-kiosk") {
+                                log::warn!("Service restart failed ({}), closing app instead", e);
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
 
                         ui.add_space(style.spacing * 0.5);
