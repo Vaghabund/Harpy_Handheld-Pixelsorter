@@ -17,9 +17,8 @@ mod flight;
 mod state;
 mod thumbnails;
 pub mod helpers;
-mod components;
 pub mod controls;
-pub mod theme;  // Consolidated button + slider rendering
+pub mod theme;   // v2 look: fonts, colours, shared widgets
 mod layouts;     // Phase-specific positioning
 mod screens;
 mod indicators;
@@ -27,6 +26,7 @@ mod menus;
 mod viewport;
 mod styles;
 mod camera;
+mod sheets;
 
 // Re-export public types
 pub use state::{Phase, DragState};
@@ -338,16 +338,8 @@ impl eframe::App for PixelSorterApp {
         
         // Render overlays AFTER CentralPanel so they appear on top
         let full_rect = ctx.screen_rect();
-        // Camera and Edit show battery and power in their own v2 controls
-        if !matches!(self.current_phase, Phase::Input | Phase::Edit) {
-            self.render_battery_indicator(ctx, full_rect);
-            self.render_shutdown_button(ctx, full_rect);
-        } else {
-            self.render_power_menu(ctx);
-        }
         self.render_developer_menu(ctx, full_rect);
-        self.render_usb_export_dialog(ctx);
-        self.render_new_session_dialog(ctx);
+        self.render_sheets(ctx);
         self.render_export_message(ctx, full_rect);
     }
 }

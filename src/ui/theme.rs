@@ -6,6 +6,8 @@ use eframe::egui;
 use egui::{Color32, FontFamily, FontId, Pos2, Rect, Vec2};
 
 pub const RED: Color32 = Color32::from_rgb(0xFF, 0x3B, 0x30);
+/// Secondary text: labels, subtitles, inactive answers
+pub const GREY: Color32 = Color32::from_rgb(0x8C, 0x8C, 0x8C);
 /// Fill of an inactive pill on top of the photo
 pub const PILL: Color32 = Color32::from_rgba_premultiplied(9, 9, 9, 140);
 
@@ -141,4 +143,97 @@ pub fn dot_shutter(ui: &mut egui::Ui, center: Pos2, s: f32) -> bool {
     }
     painter.circle_filled(center, 34.0 * s * press, Color32::WHITE);
     response.clicked()
+}
+
+/// Plain text button with an optional red dot after it, placed at `pos` by
+/// `anchor`. Dims while pressed; `shadow` keeps it readable on a photo.
+pub fn text_button(
+    ui: &mut egui::Ui,
+    id_source: impl std::hash::Hash,
+    pos: Pos2,
+    anchor: egui::Align2,
+    galley: std::sync::Arc<egui::Galley>,
+    dot: bool,
+    shadow: bool,
+) -> egui::Response {
+    let s = scale(ui.ctx());
+    let dot_r = (galley.size().y * 0.14).max(3.0 * s);
+    let dot_w = if dot { dot_r * 2.0 + galley.size().y * 0.35 } else { 0.0 };
+    let size = Vec2::new(galley.size().x + dot_w, galley.size().y);
+    let rect = anchor.anchor_rect(Rect::from_min_size(pos, size));
+    let response = ui.interact(rect.expand(12.0 * s), ui.id().with(id_source), egui::Sense::click());
+    let painter = ui.painter();
+    let mut text = egui::epaint::TextShape::new(rect.min, galley.clone());
+    if response.is_pointer_button_down_on() {
+        text.override_text_color = Some(GREY);
+    }
+    if shadow {
+        paint_shadowed(painter, rect.min, galley.clone(), 1.0);
+        if text.override_text_color.is_some() {
+            painter.add(text);
+        }
+    } else {
+        painter.add(text);
+    }
+    if dot {
+        painter.circle_filled(Pos2::new(rect.max.x - dot_r, rect.center().y + galley.size().y * 0.06), dot_r, RED);
+    }
+    response
+}
+
+/// Screen-sized texture of a black halftone dot screen (8 px pitch) used to
+/// veil what lies outside a crop. Built once per screen size and cached.
+pub fn dot_screen(ctx: &egui::Context) -> egui::TextureHandle {
+    let screen = ctx.screen_rect().size();
+    let ppp = ctx.pixels_per_point();
+    let size = [(screen.x * ppp).ceil().max(1.0) as usize, (screen.y * ppp).ceil().max(1.0) as usize];
+    let id = egui::Id::new("theme_dot_screen");
+    if let Some(texture) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        if texture.size() == size {
+            return texture;
+        }
+    }
+    let pitch = 8.0 * ppp;
+    let radius = 3.6 * ppp;
+    let mut pixels = vec![Color32::TRANSPARENT; size[0] * size[1]];
+    for y in 0..size[1] {
+        let dy = (y as f32 + 0.5) % pitch - pitch / 2.0;
+        for x in 0..size[0] {
+            let dx = (x as f32 + 0.5) % pitch - pitch / 2.0;
+            let coverage = (radius + 0.5 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0);
+            if coverage > 0.0 {
+                pixels[y * size[0] + x] = Color32::from_black_alpha((235.0 * coverage) as u8);
+            }
+        }
+    }
+    let image = egui::ColorImage { size, pixels };
+    let texture = ctx.load_texture("dot_screen", image, egui::TextureOptions::NEAREST);
+    ctx.data_mut(|d| d.insert_temp(id, texture.clone()));
+    texture
+}
+
+/// Like `galley`, but cut to one line of at most `max_width` with an ellipsis
+pub fn galley_clipped(
+    ctx: &egui::Context,
+    text: &str,
+    font: FontId,
+    color: Color32,
+    tracking_em: f32,
+    max_width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::default();
+    let spacing = font.size * tracking_em;
+    job.append(text, 0.0, egui::TextFormat { font_id: font, color, extra_letter_spacing: spacing, ..Default::default() });
+    job.wrap = egui::text::TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    ctx.fonts(|f| f.layout_job(job))
+}
+
+/// Draw a texture filling `rect`, cropping whatever overflows (CSS object-fit: cover)
+pub fn paint_cover(painter: &egui::Painter, texture: &egui::TextureHandle, rect: Rect) {
+    let size = texture.size_vec2();
+    let scale = (rect.width() / size.x).max(rect.height() / size.y);
+    let visible = rect.size() / (size * scale);
+    let min = ((Vec2::splat(1.0) - visible) / 2.0).to_pos2();
+    let uv = Rect::from_min_size(min, visible);
+    painter.image(texture.id(), rect, uv, Color32::WHITE);
 }
