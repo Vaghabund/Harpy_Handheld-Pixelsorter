@@ -1,0 +1,18 @@
+# Harpy: auto-mount USB sticks under /media/<user>/<label> on Pi OS Lite
+# (no desktop automounter). The mount is removed when the stick is unplugged.
+# Installed by setup_autostart.sh, which fills in PIXELSORT_USER/UID/GID.
+ACTION!="add", GOTO="harpy_usb_end"
+SUBSYSTEM!="block", GOTO="harpy_usb_end"
+SUBSYSTEMS!="usb", GOTO="harpy_usb_end"
+ENV{ID_FS_TYPE}!="vfat|exfat|ntfs", GOTO="harpy_usb_end"
+
+# Mount point name: volume label, or the device name (e.g. sda1) if it has none
+ENV{HARPY_MOUNT_NAME}="%k"
+ENV{ID_FS_LABEL}=="?*", ENV{HARPY_MOUNT_NAME}="%E{ID_FS_LABEL}"
+
+ENV{ID_FS_TYPE}=="ntfs", ENV{HARPY_FS_TYPE}="ntfs3"
+ENV{ID_FS_TYPE}!="ntfs", ENV{HARPY_FS_TYPE}="%E{ID_FS_TYPE}"
+
+RUN{program}+="/usr/bin/systemd-mount --no-block --collect --type=%E{HARPY_FS_TYPE} --options=uid=PIXELSORT_UID,gid=PIXELSORT_GID,umask=022 $devnode '/media/PIXELSORT_USER/%E{HARPY_MOUNT_NAME}'"
+
+LABEL="harpy_usb_end"

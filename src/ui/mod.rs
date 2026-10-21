@@ -12,9 +12,13 @@ use background::{take_finished, BackgroundTask};
 
 // Module declarations
 pub mod background;
+mod files;
+mod flight;
 mod state;
+mod thumbnails;
 pub mod helpers;
-mod components;  // Consolidated button + slider rendering
+pub mod controls;
+pub mod theme;   // v2 look: fonts, colours, shared widgets
 mod layouts;     // Phase-specific positioning
 mod screens;
 mod indicators;
@@ -22,6 +26,7 @@ mod menus;
 mod viewport;
 mod styles;
 mod camera;
+mod sheets;
 
 // Re-export public types
 pub use state::{Phase, DragState};
@@ -69,7 +74,7 @@ pub struct PixelSorterApp {
     pub export_message: Option<String>,
     pub export_message_time: Option<Instant>,
     
-    // Harpy logo (splash, sleep and wake screens)
+    // Harpy logo (sleep and wake screens)
     pub logo: Option<egui::TextureHandle>,
 
     // Splash screen
@@ -104,11 +109,19 @@ pub struct PixelSorterApp {
     // USB export dialog
     pub show_usb_export_dialog: bool,
     pub usb_export_delete_after: bool,
+    /// Sessions offered in the export dialog, with their selection
+    pub usb_export_choices: Vec<(crate::session::library::SessionFolder, bool)>,
     pub usb_export_task: Option<BackgroundTask<UsbExportResult>>,
     
     // Developer menu
     pub show_developer_menu: bool,
     
+    // In-app gallery and USB browser
+    pub files: files::FileManager,
+
+    // v2 camera/edit controls: edge panels and drag dial
+    pub controls: controls::ControlsState,
+
     // Other
     pub tint_enabled: bool,
 }
@@ -172,9 +185,12 @@ impl PixelSorterApp {
             usb_check_task: None,
             show_usb_export_dialog: false,
             usb_export_delete_after: false,
+            usb_export_choices: Vec::new(),
             usb_export_task: None,
             show_developer_menu: false,
             tint_enabled: false,
+            controls: controls::ControlsState::default(),
+            files: files::FileManager::default(),
         }
     }
 }
@@ -232,15 +248,16 @@ impl eframe::App for PixelSorterApp {
                 }
             });
         
-        // Show splash screen for 2 seconds
+        // Show the splash animation for one wingbeat
         if self.show_splash {
             if let Some(start_time) = self.splash_start_time {
                 let elapsed = start_time.elapsed().as_secs_f32();
-                if elapsed > 2.0 {
+                if elapsed > Self::splash_duration() {
                     self.show_splash = false;
                 } else {
                     self.render_splash_screen(ctx, elapsed);
-                    ctx.request_repaint();
+                    // The animation only changes once per frame
+                    ctx.request_repaint_after(flight::FlightAnimation::frame_interval());
                     return;
                 }
             }
@@ -321,11 +338,8 @@ impl eframe::App for PixelSorterApp {
         
         // Render overlays AFTER CentralPanel so they appear on top
         let full_rect = ctx.screen_rect();
-        self.render_battery_indicator(ctx, full_rect);
-        self.render_shutdown_button(ctx, full_rect);
         self.render_developer_menu(ctx, full_rect);
-        self.render_usb_export_dialog(ctx);
-        self.render_new_session_dialog(ctx);
+        self.render_sheets(ctx);
         self.render_export_message(ctx, full_rect);
     }
 }
@@ -337,6 +351,7 @@ impl PixelSorterApp {
         self.poll_update_check();
         self.poll_usb_presence(ctx);
         self.poll_usb_export();
+        self.poll_file_tasks(ctx);
     }
 
     /// Check git for updates in the background; `manual` shows the result as a toast
@@ -384,7 +399,7 @@ impl PixelSorterApp {
             let usb_now = outcome.unwrap_or(false);
             if usb_now && !self.prev_usb_present && !self.show_usb_export_dialog {
                 log::info!("USB mounted - opening export dialog");
-                self.show_usb_export_dialog = true;
+                self.open_usb_export_dialog();
             }
             self.prev_usb_present = usb_now;
         }

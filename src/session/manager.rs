@@ -1,4 +1,5 @@
 use crate::PixelSorterApp;
+use crate::session::library;
 use crate::ui::background::{take_finished, BackgroundTask};
 use eframe::egui;
 use std::path::PathBuf;
@@ -8,8 +9,8 @@ use crate::processing::SortingAlgorithm;
 /// Outcome of a USB export, shown to the user as a toast
 pub struct UsbExportResult {
     message: String,
-    /// Local images were deleted, so the session must be reset
-    deleted_local: bool,
+    /// Session folders deleted after copying
+    deleted_sessions: Vec<PathBuf>,
 }
 
 impl PixelSorterApp {
@@ -43,15 +44,36 @@ impl PixelSorterApp {
         Ok(save_path)
     }
 
-    /// Copy all sorted images to the USB drive in the background
-    pub fn start_usb_export(&mut self, ctx: &egui::Context, delete_after: bool) {
+    /// Open the export dialog with all saved sessions selected
+    pub fn open_usb_export_dialog(&mut self) {
+        self.usb_export_choices = library::list_sessions(&crate::system::paths::sorted_images_dir())
+            .into_iter()
+            .map(|session| (session, true))
+            .collect();
+        self.usb_export_delete_after = false;
+        self.show_usb_export_dialog = true;
+    }
+
+    /// Copy the selected sessions to the USB drive in the background
+    pub fn start_usb_export(&mut self, ctx: &egui::Context) {
         if self.usb_export_task.is_some() {
             return; // Export already running
         }
-        log::info!("USB export started (delete_after: {})", delete_after);
+        let sessions: Vec<PathBuf> = self
+            .usb_export_choices
+            .iter()
+            .filter(|(_, selected)| *selected)
+            .map(|(session, _)| session.path.clone())
+            .collect();
+        if sessions.is_empty() {
+            self.show_message("❌ Nothing selected to export");
+            return;
+        }
+        let delete_after = self.usb_export_delete_after;
+        log::info!("USB export of {} sessions started (delete_after: {})", sessions.len(), delete_after);
         self.show_message("⏳ Copying to USB...");
         self.usb_export_task = Some(BackgroundTask::spawn(ctx, "usb-export", move || {
-            Self::export_to_usb(delete_after)
+            Self::export_to_usb(&sessions, delete_after)
         }));
     }
 
@@ -59,76 +81,51 @@ impl PixelSorterApp {
     pub fn poll_usb_export(&mut self) {
         match take_finished(&mut self.usb_export_task) {
             Some(Some(result)) => {
-                if result.deleted_local {
-                    // Reset session since we deleted everything
+                let current_deleted = self.current_session_folder.as_ref().is_some_and(|current| {
+                    result.deleted_sessions.iter().any(|path| path.file_name().is_some_and(|name| name == current.as_str()))
+                });
+                if current_deleted {
+                    // Reset session since its folder was deleted
                     self.current_session_folder = None;
                     self.iteration_counter = 0;
                 }
                 self.show_message(result.message);
             }
-            Some(None) => self.show_message("✗ Export failed unexpectedly"),
+            Some(None) => self.show_message("❌ Export failed unexpectedly"),
             None => {}
         }
     }
 
-    /// Copy sorted images to USB and optionally delete the local copies.
+    /// Copy sessions to USB and optionally delete the local copies.
     /// Runs on a background thread.
-    fn export_to_usb(delete_after: bool) -> UsbExportResult {
-        if let Err(e) = Self::copy_to_usb() {
-            return UsbExportResult { message: format!("✗ Export failed: {}", e), deleted_local: false };
-        }
-        if !delete_after {
-            return UsbExportResult { message: "✓ Exported to USB!".to_string(), deleted_local: false };
-        }
-        match std::fs::remove_dir_all(crate::system::paths::sorted_images_dir()) {
-            Ok(()) => {
-                log::info!("Deleted local sorted_images folder after export");
-                UsbExportResult { message: "✓ Exported and deleted local copies!".to_string(), deleted_local: true }
-            }
-            Err(e) => {
-                log::error!("Failed to delete images: {}", e);
-                UsbExportResult { message: format!("⚠ Exported but deletion failed: {}", e), deleted_local: false }
-            }
-        }
-    }
+    fn export_to_usb(sessions: &[PathBuf], delete_after: bool) -> UsbExportResult {
+        let failed = |message: String| UsbExportResult { message, deleted_sessions: Vec::new() };
 
-    fn copy_to_usb() -> Result<(), String> {
-        let usb_path = crate::system::usb::find_writable_usb_mount()
-            .ok_or("No writable USB drive found")?;
-
-        // Copy sorted_images folder to USB
+        let Some(usb_path) = crate::system::usb::find_writable_usb_mount() else {
+            return failed("❌ Export failed: No writable USB drive found".to_string());
+        };
         let dest_path = usb_path.join("pixelsort_export");
-        Self::copy_directory(crate::system::paths::sorted_images_dir(), dest_path.clone())
-            .map_err(|e| format!("Copy failed: {}", e))?;
+        let copied = match library::copy_sessions(sessions, &dest_path) {
+            Ok(copied) => copied,
+            Err(e) => return failed(format!("❌ Export failed: Copy failed: {}", e)),
+        };
+        log::info!("Copied {} files to USB: {}", copied, dest_path.display());
 
-        log::info!("Successfully copied to USB: {}", dest_path.display());
-        Ok(())
-    }
-
-    fn copy_directory<P: AsRef<std::path::Path>>(src: P, dst: P) -> Result<(), Box<dyn std::error::Error>> {
-        let src = src.as_ref();
-        let dst = dst.as_ref();
-        
-        if !src.exists() {
-            return Err("Source directory does not exist".into());
+        if !delete_after {
+            return UsbExportResult { message: format!("✔ Exported {} images to USB!", copied), deleted_sessions: Vec::new() };
         }
-
-        std::fs::create_dir_all(dst)?;
-
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-
-            if src_path.is_dir() {
-                // Recursively copy subdirectories (session folders)
-                Self::copy_directory(&src_path, &dst_path)?;
-            } else if src_path.is_file() {
-                std::fs::copy(&src_path, &dst_path)?;
+        let mut deleted_sessions = Vec::new();
+        for session in sessions {
+            match library::delete_session(session) {
+                Ok(()) => deleted_sessions.push(session.clone()),
+                Err(e) => {
+                    log::error!("Failed to delete {}: {}", session.display(), e);
+                    return UsbExportResult { message: format!("⚠ Exported but deletion failed: {}", e), deleted_sessions };
+                }
             }
         }
-
-        Ok(())
+        log::info!("Deleted {} exported sessions", deleted_sessions.len());
+        UsbExportResult { message: format!("✔ Exported {} images and deleted local copies!", copied), deleted_sessions }
     }
 
     /// "New" button: start over, asking first if the current image has unsaved edits
@@ -150,13 +147,13 @@ impl PixelSorterApp {
         match self.auto_save_image(&processed, &algorithm) {
             Ok(path) => {
                 log::info!("Saved {} before starting new photo", path.display());
-                self.show_message("✓ Saved");
+                self.show_message("✔ Saved");
                 self.start_new_photo_session();
             }
             Err(e) => {
                 // Stay on the image so nothing is lost
                 log::error!("Failed to save before new photo: {}", e);
-                self.show_message(format!("✗ Save failed: {}", e));
+                self.show_message(format!("❌ Save failed: {}", e));
                 self.show_new_session_dialog = false;
             }
         }
@@ -192,7 +189,7 @@ impl PixelSorterApp {
         let algorithm = self.current_algorithm;
         if let Err(e) = self.auto_save_image(&processed, &algorithm) {
             log::error!("Failed to save iteration: {}", e);
-            self.show_message(format!("✗ Save failed: {}", e));
+            self.show_message(format!("❌ Save failed: {}", e));
             return;
         }
 

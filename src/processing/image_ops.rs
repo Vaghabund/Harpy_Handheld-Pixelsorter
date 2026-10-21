@@ -110,7 +110,7 @@ impl PixelSorterApp {
             }
             Some(Err(e)) => {
                 log::error!("Pixel sort failed: {}", e);
-                self.show_message(format!("✗ Sort failed: {}", e));
+                self.show_message(format!("❌ Sort failed: {}", e));
             }
             None => log::error!("Pixel sort thread ended without a result"),
         }
@@ -121,28 +121,6 @@ impl PixelSorterApp {
         }
     }
 
-    pub fn load_image(&mut self, ctx: &egui::Context) {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Image Files", &["png", "jpg", "jpeg", "bmp", "tiff"])
-            .pick_file()
-        {
-            match image::open(&path) {
-                Ok(img) => {
-                    let rgb_image = img.to_rgb8();
-                    self.cancel_sort();
-                    self.has_unsaved_changes = true;
-                    self.original_image = Some(rgb_image.clone());
-                    self.processed_image = Some(rgb_image.clone());
-                    self.create_processed_texture(ctx, rgb_image);
-                    self.current_phase = crate::ui::Phase::Edit; // Switch to edit phase
-                }
-                Err(e) => {
-                    log::error!("Failed to load {}: {}", path.display(), e);
-                    self.show_message(format!("✗ Could not open image: {}", e));
-                }
-            }
-        }
-    }
 }
 
 fn blend_tint_preserve_luminance(original: &image::Rgb<u8>, tint: &image::Rgb<u8>, strength: f32) -> image::Rgb<u8> {
