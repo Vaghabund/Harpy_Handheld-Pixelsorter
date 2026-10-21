@@ -110,13 +110,7 @@ impl PixelSorterApp {
 
                         ui.add_space(style.spacing);
 
-                        // Exit app button
-                        if menu_button(ui, [style.button_width, style.button_height], "❌ Exit App", style.label_size) {
-                            log::info!("Exit app requested by user");
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-
-                        ui.add_space(style.spacing * 1.5);
+                        ui.add_space(style.spacing * 0.5);
 
                         // Cancel button
                         if menu_button(ui, [style.button_width, style.cancel_button_height], "Cancel", style.label_size) {
@@ -248,10 +242,14 @@ impl PixelSorterApp {
 
                         ui.add_space(style.spacing * 0.5);
 
-                        // Exit app
-                        if menu_button(ui, [style.button_width, style.button_height], "❌ Exit App", style.label_size) {
-                            log::info!("Exit app requested from dev menu");
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        // Power off: in the kiosk there is no desktop to exit to
+                        if menu_button(ui, [style.button_width, style.button_height], "🔌 Power Off", style.label_size) {
+                            log::info!("Power off requested from dev menu");
+                            if let Err(e) = SystemControl::shutdown() {
+                                // Not on the device (e.g. desktop development): just close the app
+                                log::warn!("Shutdown unavailable ({}), closing app instead", e);
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
                     });
 

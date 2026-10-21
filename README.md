@@ -136,7 +136,7 @@ journalctl -u pixelsort-kiosk.service -f
 
 ## Kiosk Mode
 
-On the device, Harpy runs fullscreen inside cage, with no desktop behind it. After 5 minutes idle it dims to a sleep screen — tap anywhere to wake. The developer menu opens with ESC or 5 taps in the bottom-right corner; "Exit App" leaves tty1 blank (use tty2/SSH, "Restart App", or reboot).
+On the device, Harpy runs fullscreen inside cage, with no desktop behind it. After 5 minutes idle it dims to a sleep screen — tap anywhere to wake. The developer menu opens with ESC or 5 taps in the bottom-right corner. There is no "exit to desktop": the power menu and the developer menu's "Power Off" shut the device down, and "Restart App" restarts the kiosk. For a shell, use tty2 (Ctrl+Alt+F2) or SSH.
 
 ---
 
@@ -185,7 +185,7 @@ video=HDMI-A-1:1024x600@60
 
 **USB stick not detected:** it must be FAT32, exFAT or NTFS and is mounted under `/media/<user>/` by the udev rule; check with `findmnt /media -R` and `journalctl -b | grep systemd-mount`.
 
-**Can't exit:** ESC key, or tap the bottom-right corner 5 times within 3 seconds to open the developer menu.
+**Developer menu:** ESC key, or tap the bottom-right corner 5 times within 3 seconds. On a desktop machine its "Power Off" button just closes the app.
 
 **Uninstall:**
 ```bash
