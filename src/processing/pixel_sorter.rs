@@ -27,11 +27,6 @@ impl SortMode {
             SortMode::White => "White",
         }
     }
-    pub fn next(&self) -> SortMode {
-        let all = Self::all();
-        let idx = all.iter().position(|x| x == self).unwrap();
-        all[(idx + 1) % all.len()]
-    }
 }
 
 impl std::fmt::Display for SortingAlgorithm {
@@ -57,11 +52,6 @@ impl SortingAlgorithm {
         }
     }
 
-    pub fn next(&self) -> SortingAlgorithm {
-        let all = Self::all();
-        let current_index = all.iter().position(|&x| std::mem::discriminant(&x) == std::mem::discriminant(self)).unwrap();
-        all[(current_index + 1) % all.len()]
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -275,13 +265,6 @@ mod tests {
 
         assert!(brightness(white) > brightness(black));
         assert!(brightness(white) > brightness(red));
-    }
-
-    #[test]
-    fn test_algorithm_cycling() {
-        let algorithm = SortingAlgorithm::Horizontal;
-        let next = algorithm.next();
-        assert_eq!(next.name(), "Vertical");
     }
 
     #[test]
