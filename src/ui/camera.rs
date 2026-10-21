@@ -35,7 +35,7 @@ impl PixelSorterApp {
             Some(Some(Err(e))) => {
                 // Preview stream restarts automatically on the next frame
                 log::error!("Capture failed: {}", e);
-                self.show_message(format!("✗ Capture failed: {}", e));
+                self.show_message(format!("❌ Capture failed: {}", e));
             }
             Some(None) => log::error!("Capture thread ended without a result"),
             None => {}

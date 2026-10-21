@@ -4,7 +4,7 @@ use eframe::egui;
 const UI_PADDING: f32 = 20.0;
 
 impl PixelSorterApp {
-    /// Show a toast message for a few seconds (✓ prefix = success styling)
+    /// Show a toast message for a few seconds (✔ prefix = success styling)
     pub fn show_message(&mut self, message: impl Into<String>) {
         self.export_message = Some(message.into());
         self.export_message_time = Some(std::time::Instant::now());
@@ -20,8 +20,8 @@ impl PixelSorterApp {
         }
 
         if let Some(ref message) = self.export_message {
-            // Errors and warnings are red, everything else (✓, progress, info) green
-            let is_success = !message.starts_with(['✗', '⚠', '❌']);
+            // Errors and warnings are red, everything else (✔, progress, info) green
+            let is_success = !message.starts_with(['❌', '⚠']);
 
             egui::Area::new("export_message")
                 .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, UI_PADDING * 3.0))

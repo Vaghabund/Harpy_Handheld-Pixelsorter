@@ -91,7 +91,7 @@ impl PixelSorterApp {
                             log::info!("Shutdown requested by user");
                             if let Err(e) = SystemControl::shutdown() {
                                 log::error!("Failed to shutdown: {}", e);
-                                self.show_message(format!("✗ Shutdown failed: {}", e));
+                                self.show_message(format!("❌ Shutdown failed: {}", e));
                             }
                             self.show_shutdown_menu = false;
                         }
@@ -103,7 +103,7 @@ impl PixelSorterApp {
                             log::info!("Reboot requested by user");
                             if let Err(e) = SystemControl::reboot() {
                                 log::error!("Failed to reboot: {}", e);
-                                self.show_message(format!("✗ Reboot failed: {}", e));
+                                self.show_message(format!("❌ Reboot failed: {}", e));
                             }
                             self.show_shutdown_menu = false;
                         }
@@ -204,7 +204,7 @@ impl PixelSorterApp {
                                 // (only returns if the update could not be started)
                                 if let Err(e) = self.update_manager.pull_and_restart_service("pixelsort-kiosk") {
                                     log::error!("Failed to start update: {}", e);
-                                    self.show_message(format!("✗ Update failed: {}", e));
+                                    self.show_message(format!("❌ Update failed: {}", e));
                                 }
                             }
                         } else {
@@ -227,7 +227,7 @@ impl PixelSorterApp {
                         if menu_button(ui, [style.button_width, style.button_height], "🗑 Clear Session", style.label_size) {
                             self.iteration_counter = 0;
                             self.current_session_folder = None;
-                            self.show_message("✓ Session cleared");
+                            self.show_message("✔ Session cleared");
                             log::info!("Session manually cleared");
                             self.show_developer_menu = false;
                         }
@@ -310,7 +310,7 @@ impl PixelSorterApp {
                     // Copy button
                     if ui.add_sized(
                         [style.button_width, style.button_height], 
-                        egui::Button::new(button_text("✓ Copy to USB", style.label_size))
+                        egui::Button::new(button_text("✔ Copy to USB", style.label_size))
                             .fill(egui::Color32::from_rgb(40, 120, 40)))
                         .clicked() 
                     {

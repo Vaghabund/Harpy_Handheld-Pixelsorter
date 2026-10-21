@@ -66,7 +66,7 @@ impl PixelSorterApp {
                 }
                 self.show_message(result.message);
             }
-            Some(None) => self.show_message("✗ Export failed unexpectedly"),
+            Some(None) => self.show_message("❌ Export failed unexpectedly"),
             None => {}
         }
     }
@@ -75,15 +75,15 @@ impl PixelSorterApp {
     /// Runs on a background thread.
     fn export_to_usb(delete_after: bool) -> UsbExportResult {
         if let Err(e) = Self::copy_to_usb() {
-            return UsbExportResult { message: format!("✗ Export failed: {}", e), deleted_local: false };
+            return UsbExportResult { message: format!("❌ Export failed: {}", e), deleted_local: false };
         }
         if !delete_after {
-            return UsbExportResult { message: "✓ Exported to USB!".to_string(), deleted_local: false };
+            return UsbExportResult { message: "✔ Exported to USB!".to_string(), deleted_local: false };
         }
         match std::fs::remove_dir_all(crate::system::paths::sorted_images_dir()) {
             Ok(()) => {
                 log::info!("Deleted local sorted_images folder after export");
-                UsbExportResult { message: "✓ Exported and deleted local copies!".to_string(), deleted_local: true }
+                UsbExportResult { message: "✔ Exported and deleted local copies!".to_string(), deleted_local: true }
             }
             Err(e) => {
                 log::error!("Failed to delete images: {}", e);
@@ -150,13 +150,13 @@ impl PixelSorterApp {
         match self.auto_save_image(&processed, &algorithm) {
             Ok(path) => {
                 log::info!("Saved {} before starting new photo", path.display());
-                self.show_message("✓ Saved");
+                self.show_message("✔ Saved");
                 self.start_new_photo_session();
             }
             Err(e) => {
                 // Stay on the image so nothing is lost
                 log::error!("Failed to save before new photo: {}", e);
-                self.show_message(format!("✗ Save failed: {}", e));
+                self.show_message(format!("❌ Save failed: {}", e));
                 self.show_new_session_dialog = false;
             }
         }
@@ -192,7 +192,7 @@ impl PixelSorterApp {
         let algorithm = self.current_algorithm;
         if let Err(e) = self.auto_save_image(&processed, &algorithm) {
             log::error!("Failed to save iteration: {}", e);
-            self.show_message(format!("✗ Save failed: {}", e));
+            self.show_message(format!("❌ Save failed: {}", e));
             return;
         }
 

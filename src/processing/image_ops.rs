@@ -110,7 +110,7 @@ impl PixelSorterApp {
             }
             Some(Err(e)) => {
                 log::error!("Pixel sort failed: {}", e);
-                self.show_message(format!("✗ Sort failed: {}", e));
+                self.show_message(format!("❌ Sort failed: {}", e));
             }
             None => log::error!("Pixel sort thread ended without a result"),
         }
@@ -138,7 +138,7 @@ impl PixelSorterApp {
                 }
                 Err(e) => {
                     log::error!("Failed to load {}: {}", path.display(), e);
-                    self.show_message(format!("✗ Could not open image: {}", e));
+                    self.show_message(format!("❌ Could not open image: {}", e));
                 }
             }
         }
