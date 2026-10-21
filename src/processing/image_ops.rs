@@ -93,8 +93,7 @@ impl PixelSorterApp {
                 }
                 Err(e) => {
                     log::error!("Failed to load {}: {}", path.display(), e);
-                    self.export_message = Some(format!("✗ Could not open image: {}", e));
-                    self.export_message_time = Some(std::time::Instant::now());
+                    self.show_message(format!("✗ Could not open image: {}", e));
                 }
             }
         }

@@ -4,6 +4,12 @@ use eframe::egui;
 const UI_PADDING: f32 = 20.0;
 
 impl PixelSorterApp {
+    /// Show a toast message for a few seconds (✓ prefix = success styling)
+    pub fn show_message(&mut self, message: impl Into<String>) {
+        self.export_message = Some(message.into());
+        self.export_message_time = Some(std::time::Instant::now());
+    }
+
     pub fn render_export_message(&mut self, ctx: &egui::Context, _screen_rect: egui::Rect) {
         // Auto-hide message after 3 seconds
         if let Some(message_time) = self.export_message_time {

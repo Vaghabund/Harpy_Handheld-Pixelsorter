@@ -2,7 +2,7 @@ use crate::PixelSorterApp;
 use crate::system::SystemControl;
 use eframe::egui;
 use std::time::Instant;
-use super::styles::{MenuStyle, button_text};
+use super::styles::{MenuStyle, button_text, menu_button};
 
 const UI_PADDING: f32 = 20.0;
 
@@ -88,15 +88,11 @@ impl PixelSorterApp {
 
                     ui.vertical_centered(|ui| {
                         // Shutdown button
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("🔌 Shutdown", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "🔌 Shutdown", style.label_size) {
                             log::info!("Shutdown requested by user");
                             if let Err(e) = SystemControl::shutdown() {
                                 log::error!("Failed to shutdown: {}", e);
-                                self.export_message = Some(format!("✗ Shutdown failed: {}", e));
-                                self.export_message_time = Some(Instant::now());
+                                self.show_message(format!("✗ Shutdown failed: {}", e));
                             }
                             self.show_shutdown_menu = false;
                         }
@@ -104,15 +100,11 @@ impl PixelSorterApp {
                         ui.add_space(style.spacing);
 
                         // Reboot button
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("🔄 Reboot", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "🔄 Reboot", style.label_size) {
                             log::info!("Reboot requested by user");
                             if let Err(e) = SystemControl::reboot() {
                                 log::error!("Failed to reboot: {}", e);
-                                self.export_message = Some(format!("✗ Reboot failed: {}", e));
-                                self.export_message_time = Some(Instant::now());
+                                self.show_message(format!("✗ Reboot failed: {}", e));
                             }
                             self.show_shutdown_menu = false;
                         }
@@ -120,10 +112,7 @@ impl PixelSorterApp {
                         ui.add_space(style.spacing);
 
                         // Exit app button
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("❌ Exit App", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "❌ Exit App", style.label_size) {
                             log::info!("Exit app requested by user");
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
@@ -131,10 +120,7 @@ impl PixelSorterApp {
                         ui.add_space(style.spacing * 1.5);
 
                         // Cancel button
-                        if ui.add_sized(
-                            [style.button_width, style.cancel_button_height], 
-                            egui::Button::new(button_text("Cancel", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.cancel_button_height], "Cancel", style.label_size) {
                             self.show_shutdown_menu = false;
                         }
                     });
@@ -210,21 +196,16 @@ impl PixelSorterApp {
                             ui.add_space(5.0);
 
                             // Restart & Update button
-                            if ui.add_sized(
-                                [style.button_width, style.button_height], 
-                                egui::Button::new(button_text("🔄 Pull & Restart", style.label_size))
-                            ).clicked() {
+                            if menu_button(ui, [style.button_width, style.button_height], "🔄 Pull & Restart", style.label_size) {
                                 log::info!("Pull & Restart requested");
-                                self.export_message = Some("🔄 Pulling updates and restarting...".to_string());
-                                self.export_message_time = Some(Instant::now());
+                                self.show_message("🔄 Pulling updates and restarting...");
                                 self.show_developer_menu = false;
 
                                 // Pull updates and restart service using update_manager
                                 // (only returns if the update could not be started)
                                 if let Err(e) = self.update_manager.pull_and_restart_service("pixelsort-kiosk") {
                                     log::error!("Failed to start update: {}", e);
-                                    self.export_message = Some(format!("✗ Update failed: {}", e));
-                                    self.export_message_time = Some(Instant::now());
+                                    self.show_message(format!("✗ Update failed: {}", e));
                                 }
                             }
                         } else {
@@ -232,41 +213,33 @@ impl PixelSorterApp {
                             ui.add_space(5.0);
 
                             // Manual check button
-                            if ui.add_sized(
-                                [style.button_width, style.button_height], 
-                                egui::Button::new(button_text("🔄 Check Now", style.label_size))
-                            ).clicked() {
-                                    log::info!("Manual update check requested");
-                                    match self.update_manager.check_for_updates() {
-                                        Ok(update_found) => {
-                                            if update_found {
-                                                self.export_message = Some("🆕 Update found! Restart to apply.".to_string());
-                                                log::info!("Update available!");
-                                            } else {
-                                                self.export_message = Some("✅ Already up to date".to_string());
+                            if menu_button(ui, [style.button_width, style.button_height], "🔄 Check Now", style.label_size) {
+                                log::info!("Manual update check requested");
+                                match self.update_manager.check_for_updates() {
+                                    Ok(update_found) => {
+                                        if update_found {
+                                            self.show_message("🆕 Update found! Restart to apply.");
+                                            log::info!("Update available!");
+                                        } else {
+                                            self.show_message("✅ Already up to date");
                                             log::info!("No updates available");
                                         }
                                         self.update_check_time = Some(Instant::now());
                                     }
                                     Err(e) => {
-                                        self.export_message = Some(format!("❌ Update check failed: {}", e));
+                                        self.show_message(format!("❌ Update check failed: {}", e));
                                         log::error!("Update check failed: {}", e);
                                     }
                                 }
-                                self.export_message_time = Some(Instant::now());
                                 // Don't close menu - let user see the result
                             }
                         }
 
                         ui.add_space(style.spacing * 0.5);                        // Clear session
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("🗑 Clear Session", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "🗑 Clear Session", style.label_size) {
                             self.iteration_counter = 0;
                             self.current_session_folder = None;
-                            self.export_message = Some("✓ Session cleared".to_string());
-                            self.export_message_time = Some(Instant::now());
+                            self.show_message("✓ Session cleared");
                             log::info!("Session manually cleared");
                             self.show_developer_menu = false;
                         }
@@ -274,13 +247,9 @@ impl PixelSorterApp {
                         ui.add_space(style.spacing * 0.5);
 
                         // Restart app
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("🔁 Restart App", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "🔁 Restart App", style.label_size) {
                             log::info!("App restart requested");
-                            self.export_message = Some("🔁 Restarting...".to_string());
-                            self.export_message_time = Some(Instant::now());
+                            self.show_message("🔁 Restarting...");
                             // A clean exit doesn't trigger Restart=on-failure, so ask systemd
                             // to restart the service; fall back to closing if not under systemd
                             if let Err(e) = SystemControl::restart_service("pixelsort-kiosk") {
@@ -292,10 +261,7 @@ impl PixelSorterApp {
                         ui.add_space(style.spacing * 0.5);
 
                         // Exit app
-                        if ui.add_sized(
-                            [style.button_width, style.button_height], 
-                            egui::Button::new(button_text("❌ Exit App", style.label_size))
-                        ).clicked() {
+                        if menu_button(ui, [style.button_width, style.button_height], "❌ Exit App", style.label_size) {
                             log::info!("Exit app requested from dev menu");
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
@@ -304,10 +270,7 @@ impl PixelSorterApp {
                     ui.add_space(style.spacing);
 
                     // Close button
-                    if ui.add_sized(
-                        [style.button_width, style.cancel_button_height], 
-                        egui::Button::new(button_text("Close Menu", style.label_size))
-                    ).clicked() {
+                    if menu_button(ui, [style.button_width, style.cancel_button_height], "Close Menu", style.label_size) {
                         self.show_developer_menu = false;
                     }
                 });
@@ -367,27 +330,24 @@ impl PixelSorterApp {
                         
                         match self.copy_to_usb() {
                             Ok(()) => {
-                                self.export_message = Some("✓ Exported to USB!".to_string());
+                                self.show_message("✓ Exported to USB!");
                                 
                                 // Delete files if checkbox was checked
                                 if self.usb_export_delete_after {
                                     if let Err(e) = std::fs::remove_dir_all("sorted_images") {
                                         log::error!("Failed to delete images: {}", e);
-                                        self.export_message = Some(format!("⚠ Exported but deletion failed: {}", e));
+                                        self.show_message(format!("⚠ Exported but deletion failed: {}", e));
                                     } else {
                                         log::info!("Deleted local sorted_images folder after export");
-                                        self.export_message = Some("✓ Exported and deleted local copies!".to_string());
+                                        self.show_message("✓ Exported and deleted local copies!");
                                         // Reset session since we deleted everything
                                         self.current_session_folder = None;
                                         self.iteration_counter = 0;
                                     }
                                 }
-                                
-                                self.export_message_time = Some(Instant::now());
                             }
                             Err(e) => {
-                                self.export_message = Some(format!("✗ Export failed: {}", e));
-                                self.export_message_time = Some(Instant::now());
+                                self.show_message(format!("✗ Export failed: {}", e));
                             }
                         }
                         
@@ -398,11 +358,7 @@ impl PixelSorterApp {
                     ui.add_space(style.spacing * 0.67);
                     
                     // Cancel button
-                    if ui.add_sized(
-                        [style.button_width, style.cancel_button_height], 
-                        egui::Button::new(button_text("Cancel", style.label_size)))
-                        .clicked() 
-                    {
+                    if menu_button(ui, [style.button_width, style.cancel_button_height], "Cancel", style.label_size) {
                         self.show_usb_export_dialog = false;
                         self.usb_export_delete_after = false; // Reset
                     }

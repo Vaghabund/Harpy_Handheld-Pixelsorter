@@ -18,8 +18,7 @@ impl PixelSorterApp {
                     Err(e) => {
                         // Preview stream restarts automatically on the next frame
                         log::error!("Capture failed: {}", e);
-                        self.export_message = Some(format!("✗ Capture failed: {}", e));
-                        self.export_message_time = Some(std::time::Instant::now());
+                        self.show_message(format!("✗ Capture failed: {}", e));
                     }
                 }
             }

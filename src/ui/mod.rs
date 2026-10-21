@@ -9,7 +9,7 @@ use crate::hardware::CameraController;
 
 // Module declarations
 mod state;
-mod helpers;
+pub mod helpers;
 mod components;  // Consolidated button + slider rendering
 mod layouts;     // Phase-specific positioning
 mod screens;
@@ -58,10 +58,12 @@ pub struct PixelSorterApp {
     pub export_message: Option<String>,
     pub export_message_time: Option<Instant>,
     
+    // Harpy logo (splash, sleep and wake screens)
+    pub logo: Option<egui::TextureHandle>,
+
     // Splash screen
     pub show_splash: bool,
     pub splash_start_time: Option<Instant>,
-    pub splash_logo: Option<egui::TextureHandle>,
     
     // Exit mechanism for kiosk mode
     pub exit_tap_count: u32,
@@ -72,7 +74,6 @@ pub struct PixelSorterApp {
     pub is_waking: bool,
     pub wake_start_time: Option<Instant>,
     pub last_interaction_time: Instant,
-    pub sleep_logo: Option<egui::TextureHandle>,
     
     // Update checking
     pub update_manager: UpdateManager,
@@ -130,16 +131,15 @@ impl PixelSorterApp {
             current_session_folder: None,
             export_message: None,
             export_message_time: None,
+            logo: None,
             show_splash: true,
             splash_start_time: Some(Instant::now()),
-            splash_logo: None,
             exit_tap_count: 0,
             exit_tap_last_time: None,
             is_sleeping: false,
             is_waking: false,
             wake_start_time: None,
             last_interaction_time: Instant::now(),
-            sleep_logo: None,
             update_manager: UpdateManager::new("/home/pixelsort/Pixelsort".to_string()),
             update_check_time: None,
             startup_check_done: false,
@@ -154,39 +154,7 @@ impl PixelSorterApp {
     }
 
     fn usb_present(&self) -> bool {
-        #[cfg(target_os = "linux")]
-        {
-            use std::process::Command;
-            
-            // Check mounted filesystems for USB drives (exfat, vfat, ntfs)
-            if let Ok(output) = Command::new("mount").output() {
-                let mount_output = String::from_utf8_lossy(&output.stdout);
-                
-                // Look for USB filesystem types mounted under /media/
-                for line in mount_output.lines() {
-                    if line.contains("/media/") && 
-                       (line.contains("exfat") || line.contains("vfat") || line.contains("ntfs")) {
-                        // Extract the mount point (between "on " and " type")
-                        if let Some(on_idx) = line.find(" on ") {
-                            if let Some(type_idx) = line.find(" type ") {
-                                let mount_point = &line[on_idx + 4..type_idx];
-                                log::debug!("Found USB drive at: {}", mount_point);
-                                
-                                // Test if we can write to it
-                                let test_path = std::path::PathBuf::from(mount_point)
-                                    .join(".pixelsort_usb_check");
-                                if std::fs::write(&test_path, "test").is_ok() {
-                                    let _ = std::fs::remove_file(&test_path);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        false
+        crate::system::usb::find_writable_usb_mount().is_some()
     }
 }
 

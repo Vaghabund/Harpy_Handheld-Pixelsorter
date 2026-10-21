@@ -115,11 +115,8 @@ fn setup_touch_style(ctx: &egui::Context) {
 
 fn load_icon() -> egui::IconData {
     // Try to load icon from file, fallback to embedded default
-    let icon_path = "assets/Harpy_ICON.png";
-    
-    match image::open(icon_path) {
-        Ok(img) => {
-            let rgba = img.to_rgba8();
+    match crate::ui::helpers::load_logo_image() {
+        Some(rgba) => {
             let (width, height) = rgba.dimensions();
             egui::IconData {
                 rgba: rgba.into_raw(),
@@ -127,9 +124,8 @@ fn load_icon() -> egui::IconData {
                 height,
             }
         }
-        Err(_) => {
+        None => {
             // Fallback: Create a simple colored square as default icon
-            log::warn!("Could not load icon from {}, using default", icon_path);
             let width = 64;
             let height = 64;
             let mut rgba = vec![0u8; (width * height * 4) as usize];

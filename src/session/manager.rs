@@ -35,76 +35,18 @@ impl PixelSorterApp {
     }
 
     pub fn copy_to_usb(&self) -> Result<(), Box<dyn std::error::Error>> {
-        #[cfg(target_os = "linux")]
-        {
-            use std::process::Command;
-            
-            log::info!("Searching for USB drives via mount points...");
-            
-            // Check mounted filesystems for USB drives
-            let output = Command::new("mount").output()?;
-            let mount_output = String::from_utf8_lossy(&output.stdout);
-            
-            let mut usb_found = false;
-            
-            // Look for USB filesystem types mounted under /media/
-            for line in mount_output.lines() {
-                if line.contains("/media/") && 
-                   (line.contains("exfat") || line.contains("vfat") || line.contains("ntfs")) {
-                    // Extract the mount point (between "on " and " type")
-                    if let Some(on_idx) = line.find(" on ") {
-                        if let Some(type_idx) = line.find(" type ") {
-                            let mount_point = &line[on_idx + 4..type_idx];
-                            log::info!("Found USB drive at: {}", mount_point);
-                            
-                            let usb_path = std::path::PathBuf::from(mount_point);
-                            
-                            // Test if we can write to it
-                            let test_file = usb_path.join(".pixelsort_test");
-                            if std::fs::write(&test_file, "test").is_ok() {
-                                let _ = std::fs::remove_file(&test_file);
-                                
-                                log::info!("Writable USB confirmed at: {}", mount_point);
-                                
-                                // Try to copy sorted_images folder to USB
-                                let dest_path = usb_path.join("pixelsort_export");
-                                match Self::copy_directory(
-                                    PathBuf::from("sorted_images"),
-                                    dest_path.clone(),
-                                ) {
-                                    Ok(()) => {
-                                        log::info!("Successfully copied to USB: {}", dest_path.display());
-                                        usb_found = true;
-                                        break;
-                                    }
-                                    Err(e) => {
-                                        log::warn!("Failed to copy to {}: {}", dest_path.display(), e);
-                                        return Err(format!("Copy failed: {}", e).into());
-                                    }
-                                }
-                            } else {
-                                log::warn!("Cannot write to USB at: {}", mount_point);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if !usb_found {
-                log::warn!("No writable USB drive found in mount points");
-                return Err("No writable USB drive found".into());
-            }
-            
-            Ok(())
-        }
-        
-        #[cfg(not(target_os = "linux"))]
-        {
-            Err("USB export only available on Linux".into())
-        }
+        let usb_path = crate::system::usb::find_writable_usb_mount()
+            .ok_or("No writable USB drive found")?;
+
+        // Copy sorted_images folder to USB
+        let dest_path = usb_path.join("pixelsort_export");
+        Self::copy_directory(PathBuf::from("sorted_images"), dest_path.clone())
+            .map_err(|e| format!("Copy failed: {}", e))?;
+
+        log::info!("Successfully copied to USB: {}", dest_path.display());
+        Ok(())
     }
 
-    #[cfg(target_os = "linux")]
     fn copy_directory<P: AsRef<std::path::Path>>(src: P, dst: P) -> Result<(), Box<dyn std::error::Error>> {
         let src = src.as_ref();
         let dst = dst.as_ref();

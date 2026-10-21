@@ -233,3 +233,8 @@ impl MenuStyle {
 pub fn button_text(text: &str, size: f32) -> egui::RichText {
     egui::RichText::new(text).size(size)
 }
+
+/// Fixed-size menu button; returns true when clicked
+pub fn menu_button(ui: &mut egui::Ui, size: [f32; 2], text: &str, text_size: f32) -> bool {
+    ui.add_sized(size, egui::Button::new(button_text(text, text_size))).clicked()
+}

@@ -2,6 +2,7 @@
 
 pub mod control;
 pub mod update_manager;
+pub mod usb;
 
 // Re-export commonly used types
 pub use control::SystemControl;
