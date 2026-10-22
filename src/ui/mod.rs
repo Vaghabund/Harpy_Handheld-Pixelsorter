@@ -22,9 +22,7 @@ pub mod theme;   // v2 look: fonts, colours, shared widgets
 mod layouts;     // Phase-specific positioning
 mod screens;
 mod indicators;
-mod menus;
 mod viewport;
-mod styles;
 mod camera;
 mod sheets;
 
@@ -338,7 +336,6 @@ impl eframe::App for PixelSorterApp {
         
         // Render overlays AFTER CentralPanel so they appear on top
         let full_rect = ctx.screen_rect();
-        self.render_developer_menu(ctx, full_rect);
         self.render_sheets(ctx);
         self.render_export_message(ctx, full_rect);
     }

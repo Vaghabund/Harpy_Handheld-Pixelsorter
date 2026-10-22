@@ -1,4 +1,4 @@
-//! Full-screen sheets in the v2 style (New photo, Power, Export to USB):
+//! Full-screen sheets in the v2 style (Developer, New photo, Power, Export to USB):
 //! a dark page with a Swiss heading block top left, a big figure top right
 //! and large type answers bottom left, instead of floating dialog windows.
 
@@ -81,15 +81,39 @@ impl Sheet<'_> {
         (response.clicked(), rect)
     }
 
-    /// Stack of answers anchored to the bottom left; returns the index tapped
-    fn answers(&mut self, items: &[(&str, Color32, bool)]) -> Option<usize> {
+    /// Right-aligned table of "CAPS LABEL   value" rows in the top right
+    fn info_rows(&mut self, rows: &[(&str, String)]) {
         let ctx = self.ui.ctx().clone();
         let s = self.s;
-        let line = ctx.fonts(|f| f.row_height(&theme::medium(72.0 * s))) * 1.02;
+        let right = self.rect.max.x - 48.0 * s;
+        let label_x = self.rect.max.x - 470.0 * s;
+        let row_h = 36.0 * s;
+        let p = self.ui.painter();
+        for (i, (label, value)) in rows.iter().enumerate() {
+            let y = self.rect.min.y + 48.0 * s + i as f32 * row_h;
+            let v = theme::galley_clipped(&ctx, value, theme::medium(20.0 * s), Color32::WHITE, -0.02, right - label_x - 120.0 * s);
+            let l = caps(&ctx, label, 11.0 * s, theme::GREY);
+            let base = y + v.size().y;
+            p.galley(Pos2::new(label_x, base - l.size().y - 3.0 * s), l);
+            p.galley(Pos2::new(right - v.size().x, y), v);
+            p.line_segment([Pos2::new(label_x, y + row_h - 6.0 * s), Pos2::new(right, y + row_h - 6.0 * s)], egui::Stroke::new(1.0_f32, LINE));
+        }
+    }
+
+    /// Stack of answers anchored to the bottom left; returns the index tapped
+    fn answers(&mut self, items: &[(&str, Color32, bool)]) -> Option<usize> {
+        self.answers_sized(items, 72.0)
+    }
+
+    /// `answers` with a type size other than 72
+    fn answers_sized(&mut self, items: &[(&str, Color32, bool)], size: f32) -> Option<usize> {
+        let ctx = self.ui.ctx().clone();
+        let s = self.s;
+        let line = ctx.fonts(|f| f.row_height(&theme::medium(size * s))) * 1.02;
         let mut y = self.rect.max.y - 36.0 * s - line * items.len() as f32;
         let mut tapped = None;
         for (i, (text, color, dot)) in items.iter().enumerate() {
-            if self.answer(Pos2::new(self.rect.min.x + 48.0 * s, y), text, 72.0, *color, *dot).0 {
+            if self.answer(Pos2::new(self.rect.min.x + 48.0 * s, y), text, size, *color, *dot).0 {
                 tapped = Some(i);
             }
             y += line;
@@ -101,7 +125,7 @@ impl Sheet<'_> {
 impl PixelSorterApp {
     /// Draw whichever sheet is open (at most one) over everything else
     pub fn render_sheets(&mut self, ctx: &egui::Context) {
-        if !(self.show_new_session_dialog || self.show_shutdown_menu || self.show_usb_export_dialog) {
+        if !(self.show_developer_menu || self.show_new_session_dialog || self.show_shutdown_menu || self.show_usb_export_dialog) {
             return;
         }
         let rect = ctx.screen_rect();
@@ -114,7 +138,9 @@ impl PixelSorterApp {
                 let _ = ui.allocate_rect(rect, egui::Sense::click_and_drag());
                 ui.painter().rect_filled(rect, 0.0, SHEET_BG);
                 let mut sheet = Sheet { ui, rect, s };
-                if self.show_new_session_dialog {
+                if self.show_developer_menu {
+                    self.developer_sheet(&mut sheet, ctx);
+                } else if self.show_new_session_dialog {
                     self.new_photo_sheet(&mut sheet);
                 } else if self.show_shutdown_menu {
                     self.power_sheet(&mut sheet);
@@ -122,6 +148,98 @@ impl PixelSorterApp {
                     self.export_sheet(&mut sheet);
                 }
             });
+    }
+
+    /// Hidden developer menu (ESC or 5 taps in the bottom-right corner)
+    fn developer_sheet(&mut self, sheet: &mut Sheet, ctx: &egui::Context) {
+        let s = sheet.s;
+        sheet.heading("Developer", "Harpy", &format!("v{}", env!("CARGO_PKG_VERSION")));
+
+        let battery = crate::hardware::get_battery_status();
+        let battery_text = match (battery.is_available, battery.is_charging) {
+            (false, _) => "Not detected".to_string(),
+            (true, false) => format!("{:.0}% · {:.1} V", battery.percentage, battery.voltage),
+            (true, true) => format!("{:.0}% · {:.1} V · charging", battery.percentage, battery.voltage),
+        };
+        let session = self.current_session_folder.as_deref().map(session_title).unwrap_or_else(|| "None".to_string());
+        let update = if self.update_check_task.is_some() {
+            "Checking…"
+        } else if self.update_manager.update_available {
+            "Available"
+        } else {
+            "Up to date"
+        };
+        sheet.info_rows(&[
+            ("Battery", battery_text),
+            ("Screen", format!("{:?}", self.current_phase)),
+            ("Session", session),
+            ("Iteration", self.iteration_counter.to_string()),
+            ("Update", update.to_string()),
+        ]);
+
+        let hint = caps(ctx, "ESC or 5 taps bottom right", 11.0 * s, DIM);
+        let pos = sheet.rect.max - Vec2::new(48.0, 40.0) * s - hint.size();
+        sheet.ui.painter().galley(pos, hint);
+
+        let (update_label, update_color, update_dot) = if self.update_check_task.is_some() {
+            ("Checking…", DIM, false)
+        } else if self.update_manager.update_available {
+            ("Pull & restart", Color32::WHITE, true)
+        } else {
+            ("Check for updates", Color32::WHITE, false)
+        };
+        let tapped = sheet.answers_sized(&[
+            (update_label, update_color, update_dot),
+            ("Clear session", Color32::WHITE, false),
+            ("Restart app", Color32::WHITE, false),
+            ("Power off", Color32::WHITE, false),
+            ("Close", DIM, false),
+        ], 44.0);
+        match tapped {
+            Some(0) if self.update_check_task.is_some() => {}
+            Some(0) if self.update_manager.update_available => {
+                log::info!("Pull & Restart requested");
+                self.show_message("🔄 Pulling updates and restarting...");
+                self.show_developer_menu = false;
+                // Only returns if the update could not be started
+                if let Err(e) = self.update_manager.pull_and_restart_service("pixelsort-kiosk") {
+                    log::error!("Failed to start update: {}", e);
+                    self.show_message(format!("❌ Update failed: {}", e));
+                }
+            }
+            Some(0) => {
+                // The result is shown as a toast; the menu stays open
+                log::info!("Manual update check requested");
+                self.start_update_check(ctx, true);
+            }
+            Some(1) => {
+                self.iteration_counter = 0;
+                self.current_session_folder = None;
+                self.show_message("✔ Session cleared");
+                log::info!("Session manually cleared");
+                self.show_developer_menu = false;
+            }
+            Some(2) => {
+                log::info!("App restart requested");
+                self.show_message("🔁 Restarting...");
+                // A clean exit doesn't trigger Restart=on-failure, so ask systemd
+                // to restart the service; fall back to closing if not under systemd
+                if let Err(e) = SystemControl::restart_service("pixelsort-kiosk") {
+                    log::warn!("Service restart failed ({}), closing app instead", e);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+            Some(3) => {
+                log::info!("Power off requested from dev menu");
+                if let Err(e) = SystemControl::shutdown() {
+                    // Not on the device (e.g. desktop development): just close the app
+                    log::warn!("Shutdown unavailable ({}), closing app instead", e);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+            Some(_) => self.show_developer_menu = false,
+            None => {}
+        }
     }
 
     fn new_photo_sheet(&mut self, sheet: &mut Sheet) {
